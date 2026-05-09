@@ -1,0 +1,13 @@
+.{
+	.name = .Cubyz_linter,
+	.version = "0.0.0",
+	.fingerprint = 0x17d6fd483873cba6, // Changing this has security and trust implications.
+	.minimum_zig_version = "0.16.0",
+	.paths = .{
+		"build.zig",
+		"build.zig.zon",
+		"src",
+		"LICENSE",
+		"README.md",
+	},
+}
