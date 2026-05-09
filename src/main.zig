@@ -37,6 +37,88 @@ fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex
 
 	std.log.err("Found formatting error in line {} of file {s}: {s}\n{s}\n{s}^", .{lineNumber, filePath, msg, data[lineStart..lineEnd], startLineChars.items});
 }
+fn checkImports(data: []const u8, filePath: []const u8) void {
+	var split = std.mem.splitScalar(u8, data, '\n');
+	var finishedImports: bool = false;
+
+	var buf: [65536]u8 = undefined;
+	while (split.next()) |line| {
+		const lineZ = std.fmt.bufPrintZ(&buf, "{s}", .{line}) catch {
+			printError("Line too long, seriously what are you doing?", filePath, data, line.ptr - data.ptr);
+			continue;
+		};
+		var tokenizer = std.zig.Tokenizer.init(lineZ);
+		var token = tokenizer.next();
+		if (token.tag == .eof) continue;
+		if (token.tag == .doc_comment) continue;
+		if (token.tag == .container_doc_comment) continue;
+		const isImport: bool = blk: {
+			if (line[0] == '\t') break :blk false;
+
+			if (token.tag == .keyword_pub) token = tokenizer.next();
+			if (token.tag != .keyword_const) break :blk false;
+			token = tokenizer.next();
+			if (token.tag != .identifier) break :blk false;
+			var aliasName = tokenizer.buffer[token.loc.start..token.loc.end];
+			token = tokenizer.next();
+			if (token.tag != .equal) break :blk false;
+
+			token = tokenizer.next();
+			switch (token.tag) {
+				.builtin => { // @import
+					const importKeyword = tokenizer.buffer[token.loc.start..token.loc.end];
+					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
+					token = tokenizer.next();
+					if (token.tag != .l_paren) break :blk false;
+					token = tokenizer.next();
+					if (token.tag != .string_literal) break :blk false;
+					const importNameToken = token;
+					token = tokenizer.next();
+					if (token.tag != .r_paren) break :blk false;
+					token = tokenizer.next();
+					if (token.tag != .semicolon) break :blk false;
+
+					var importName = tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end];
+					importName = std.mem.trim(u8, importName, "\"");
+					if (std.mem.endsWith(u8, importName, ".zon")) importName.len -= 4;
+					if (std.mem.endsWith(u8, importName, ".zig")) importName.len -= 4;
+					if (std.mem.findLast(u8, importName, "/")) |i| importName = importName[i + 1 ..];
+					if (aliasName[0] == '@') aliasName = aliasName[2 .. aliasName.len - 1];
+					if (std.mem.findLast(u8, aliasName, "/")) |i| aliasName = aliasName[i + 1 ..];
+					if (!std.mem.eql(u8, aliasName, importName)) {
+						std.log.err("{s} {s}", .{aliasName, importName});
+						printError("Encountered import with mismatched name", filePath, data, line.ptr - data.ptr + importNameToken.loc.start);
+					}
+					break :blk true;
+				},
+				.identifier => { // alias
+					var importNameToken = token;
+					while (true) {
+						token = tokenizer.next();
+						if (token.tag == .semicolon) break;
+						if (token.tag != .period) break :blk false;
+						token = tokenizer.next();
+						if (token.tag != .identifier) break :blk false;
+						importNameToken = token;
+					}
+					if (!std.mem.eql(u8, aliasName, tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end])) {
+						if (finishedImports) break :blk false;
+						printError("Encountered alias with mismatched name", filePath, data, line.ptr - data.ptr + importNameToken.loc.start);
+					}
+					break :blk true;
+				},
+				else => break :blk false,
+			}
+		};
+		if (isImport) {
+			if (finishedImports) {
+				printError("Encountered import/alias after import section", filePath, data, line.ptr - data.ptr);
+			}
+		} else {
+			finishedImports = true;
+		}
+	}
+}
 
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 	const data = try dir.readFileAlloc(io, filePath, allocator, .unlimited);
@@ -79,6 +161,9 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 	}
 	if (data.len != 0 and data[data.len - 1] != '\n' or (data.len > 2 and data[data.len - 2] == '\n')) {
 		printError("File should end with a single empty line", filePath, data, data.len - 1);
+	}
+	if (std.mem.endsWith(u8, filePath, ".zig")) {
+		checkImports(data, filePath);
 	}
 }
 
