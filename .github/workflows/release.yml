@@ -1,0 +1,49 @@
+name: Create release
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: echo "VERSION=$(cat .zigversion)" >> $GITHUB_ENV
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.VERSION }}
+
+      - run: zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseFast -Dcpu=baseline
+      - run: mv ./zig-out/bin/Cubyz-linter Cubyz-linter-x86_64-linux
+      - run: zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseFast -Dcpu=baseline
+      - run: mv ./zig-out/bin/Cubyz-linter Cubyz-linter-aarch64-linux
+      - run: zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast -Dcpu=baseline
+      - run: mv ./zig-out/bin/Cubyz-linter.exe Cubyz-linter-x86_64-windows.exe
+      - run: zig build -Dtarget=aarch64-windows-gnu -Doptimize=ReleaseFast -Dcpu=baseline
+      - run: mv ./zig-out/bin/Cubyz-linter.exe Cubyz-linter-aarch64-windows.exe
+      - run: zig build -Dtarget=x86_64-macos-none -Doptimize=ReleaseFast -Dcpu=baseline
+      - run: mv ./zig-out/bin/Cubyz-linter Cubyz-linter-x86_64-macos
+      - run: zig build -Dtarget=aarch64-macos-none -Doptimize=ReleaseFast -Dcpu=baseline
+      - run: mv ./zig-out/bin/Cubyz-linter Cubyz-linter-aarch64-macos
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+        run: |
+          gh release create "$tag" \
+              --repo="$GITHUB_REPOSITORY" \
+              --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
+              Cubyz-linter-x86_64-linux \
+              Cubyz-linter-aarch64-linux \
+              Cubyz-linter-x86_64-windows.exe \
+              Cubyz-linter-aarch64-windows.exe \
+              Cubyz-linter-x86_64-macos \
+              Cubyz-linter-aarch64-macos
+          gh release

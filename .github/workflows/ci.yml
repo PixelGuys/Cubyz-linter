@@ -1,0 +1,33 @@
+name: Compilation and Format Check
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    name: Compilation Check
+    steps:
+      - uses: actions/checkout@v3
+      - run: echo "VERSION=$(cat .zigversion)" >> $GITHUB_ENV
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.VERSION }}
+      - run: wget -O ./Cubyz-fmt https://github.com/PixelGuys/Cubyz-formatter/releases/download/0.16.0+0/Cubyz-fmt-x86_64-linux
+      - run: chmod +x ./Cubyz-fmt
+      - run: |
+          if ./Cubyz-fmt src/ *.zig *.zon | grep -q . ; then
+            git diff --color=always;
+            exit 1;
+          fi
+      - run: zig build -Dtarget=x86_64-linux-gnu
+      - run: zig build -Dtarget=x86_64-macos-none
+      - run: zig build -Dtarget=x86_64-windows-gnu
+      - run: zig build -Dtarget=aarch64-linux-gnu
+      - run: zig build -Dtarget=aarch64-macos-none
+      - run: zig build -Dtarget=aarch64-windows-gnu
+      - run: zig build test
+      - run: zig build run -- .
