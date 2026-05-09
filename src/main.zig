@@ -109,9 +109,14 @@ pub fn main(init: std.process.Init) !void {
 	}
 
 	for (args[1..]) |arg| {
-		var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
-		defer dir.close(io);
-		try checkDirectory(dir);
+		const stat = try std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true});
+		if (stat.kind == .directory) {
+			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
+			defer dir.close(io);
+			try checkDirectory(dir);
+		} else {
+			try checkFile(std.Io.Dir.cwd(), arg);
+		}
 	}
 
 	if (failed) std.process.exit(1);

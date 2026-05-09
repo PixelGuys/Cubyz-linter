@@ -30,4 +30,4 @@ jobs:
       - run: zig build -Dtarget=aarch64-macos-none
       - run: zig build -Dtarget=aarch64-windows-gnu
       - run: zig build test
-      - run: zig build run -- .
+      - run: zig build run -- *.zig *.zon src
