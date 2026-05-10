@@ -96,11 +96,8 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					},
 					.field_access => { // alias
 						const importName = ast.getNodeSource(index);
-						var importNameToken: []const u8 = "";
-						var split = std.mem.splitScalar(u8, importName, '.');
-						while (split.next()) |next| {
-							importNameToken = next;
-						}
+						var split = std.mem.splitBackwardsScalar(u8, importName, '.');
+						const importNameToken = split.next().?;
 
 						if (!isAliasAllowed(importNameToken, aliasName)) {
 							if (finishedImports) break :blk false;
