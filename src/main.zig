@@ -119,8 +119,10 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 }
 
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
-	const data = try dir.readFileAlloc(io, filePath, allocator, .unlimited);
+	const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
 	defer allocator.free(data);
+	var ast = try std.zig.Ast.parse(allocator, data, .zig);
+	defer ast.deinit(allocator);
 
 	var lineStart: bool = true;
 
@@ -161,11 +163,6 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 		printError("File should end with a single empty line", filePath, data, data.len - 1);
 	}
 	if (std.mem.endsWith(u8, filePath, ".zig")) {
-		const dupe = try std.mem.Allocator.dupeZ(allocator, u8, data);
-		defer allocator.free(dupe);
-		var ast = try std.zig.Ast.parse(allocator, dupe, .zig);
-		defer ast.deinit(allocator);
-
 		checkImports(&ast, filePath);
 	}
 }
