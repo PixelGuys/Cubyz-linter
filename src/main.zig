@@ -37,6 +37,30 @@ fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex
 
 	std.log.err("Found formatting error in line {} of file {s}: {s}\n{s}\n{s}^", .{lineNumber, filePath, msg, data[lineStart..lineEnd], startLineChars.items});
 }
+
+fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
+	var importName = _importName;
+	var aliasName = _aliasName;
+
+	if (importName.len != 0 and importName[0] == '"') importName = std.mem.trim(u8, importName, "\"");
+
+	if (std.mem.endsWith(u8, importName, "_list.zig")) return true;
+	if (std.mem.eql(u8, aliasName, "Atomic") and std.mem.eql(u8, importName, "Value")) return true;
+
+	if (std.mem.endsWith(u8, importName, ".zon")) importName.len -= 4;
+	if (std.mem.endsWith(u8, importName, ".zig")) importName.len -= 4;
+
+	if (importName.len != 0 and importName[0] == '@') importName = importName[2 .. importName.len - 1];
+	if (aliasName.len != 0 and aliasName[0] == '@') aliasName = aliasName[2 .. aliasName.len - 1];
+
+	if (std.mem.findLast(u8, importName, "/")) |i| importName = importName[i + 1 ..];
+	if (std.mem.findLast(u8, aliasName, "/")) |i| aliasName = aliasName[i + 1 ..];
+
+	if (std.mem.findLast(u8, importName, ":")) |i| importName = importName[i + 1 ..];
+	if (std.mem.findLast(u8, aliasName, ":")) |i| aliasName = aliasName[i + 1 ..];
+
+	return std.mem.eql(u8, importName, aliasName);
+}
 fn checkImports(data: []const u8, filePath: []const u8) void {
 	var split = std.mem.splitScalar(u8, data, '\n');
 	var finishedImports: bool = false;
@@ -59,7 +83,7 @@ fn checkImports(data: []const u8, filePath: []const u8) void {
 			if (token.tag != .keyword_const) break :blk false;
 			token = tokenizer.next();
 			if (token.tag != .identifier) break :blk false;
-			var aliasName = tokenizer.buffer[token.loc.start..token.loc.end];
+			const aliasName = tokenizer.buffer[token.loc.start..token.loc.end];
 			token = tokenizer.next();
 			if (token.tag != .equal) break :blk false;
 
@@ -78,14 +102,8 @@ fn checkImports(data: []const u8, filePath: []const u8) void {
 					token = tokenizer.next();
 					if (token.tag != .semicolon) break :blk false;
 
-					var importName = tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end];
-					importName = std.mem.trim(u8, importName, "\"");
-					if (std.mem.endsWith(u8, importName, ".zon")) importName.len -= 4;
-					if (std.mem.endsWith(u8, importName, ".zig")) importName.len -= 4;
-					if (std.mem.findLast(u8, importName, "/")) |i| importName = importName[i + 1 ..];
-					if (aliasName[0] == '@') aliasName = aliasName[2 .. aliasName.len - 1];
-					if (std.mem.findLast(u8, aliasName, "/")) |i| aliasName = aliasName[i + 1 ..];
-					if (!std.mem.eql(u8, aliasName, importName)) {
+					const importName = tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end];
+					if (!isAliasAllowed(importName, aliasName)) {
 						std.log.err("{s} {s}", .{aliasName, importName});
 						printError("Encountered import with mismatched name", filePath, data, line.ptr - data.ptr + importNameToken.loc.start);
 					}
@@ -101,7 +119,7 @@ fn checkImports(data: []const u8, filePath: []const u8) void {
 						if (token.tag != .identifier) break :blk false;
 						importNameToken = token;
 					}
-					if (!std.mem.eql(u8, aliasName, tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end])) {
+					if (!isAliasAllowed(tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end], aliasName)) {
 						if (finishedImports) break :blk false;
 						printError("Encountered alias with mismatched name", filePath, data, line.ptr - data.ptr + importNameToken.loc.start);
 					}
