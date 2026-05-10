@@ -83,6 +83,8 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 	if (std.mem.findLast(u8, importName, ":")) |i| importName = importName[i + 1 ..];
 	if (std.mem.findLast(u8, aliasName, ":")) |i| aliasName = aliasName[i + 1 ..];
 
+	if (std.mem.eql(u8, importName, "world") and std.mem.eql(u8, aliasName, "world_zig")) return true; // TODO: Remove after https://github.com/PixelGuys/Cubyz/issues/3069
+
 	return std.mem.eql(u8, importName, aliasName);
 }
 fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
