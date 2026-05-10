@@ -112,13 +112,17 @@ fn checkImports(data: []const u8, filePath: []const u8) void {
 				},
 				.identifier => { // alias
 					var importNameToken = token;
+					var foundPath: bool = false;
+					token = tokenizer.next();
+					if (token.tag == .semicolon) break :blk false; // const x = y; is not an import
 					while (true) {
-						token = tokenizer.next();
-						if (token.tag == .semicolon) break;
 						if (token.tag != .period) break :blk false;
 						token = tokenizer.next();
 						if (token.tag != .identifier) break :blk false;
 						importNameToken = token;
+						foundPath = true;
+						token = tokenizer.next();
+						if (token.tag == .semicolon) break;
 					}
 					if (!isAliasAllowed(tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end], aliasName)) {
 						if (finishedImports) break :blk false;
