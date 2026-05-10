@@ -1,6 +1,4 @@
-const std = @import(
-	"std",
-);
+const std = @import("std");
 const Io = std.Io;
 
 var io: Io = undefined;
