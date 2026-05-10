@@ -1,5 +1,5 @@
-const std = @import("std");
-const Io = std.Io;
+pub const std = @import("std");
+pub const Io = std.Io;
 
 var io: Io = undefined;
 var allocator: std.mem.Allocator = undefined;
@@ -80,6 +80,98 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 	if (data.len != 0 and data[data.len - 1] != '\n' or (data.len > 2 and data[data.len - 2] == '\n')) {
 		printError("File should end with a single empty line", filePath, data, data.len - 1);
 	}
+
+	if (std.mem.endsWith(u8, filePath, ".zig")) {
+		const dupe = try std.mem.Allocator.dupeZ(allocator, u8, data);
+		defer allocator.free(dupe);
+		try checkZigFile(dupe, filePath);
+	}
+}
+
+fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
+	var importName = _importName;
+	var aliasName = _aliasName;
+
+	if (importName.len != 0 and importName[0] == '"') importName = std.mem.trim(u8, importName, "\"");
+
+	if (std.mem.endsWith(u8, importName, "_list.zig")) return true;
+	if (std.mem.eql(u8, aliasName, "Atomic") and std.mem.eql(u8, importName, "Value")) return true;
+
+	if (std.mem.endsWith(u8, importName, ".zon")) importName.len -= 4;
+	if (std.mem.endsWith(u8, importName, ".zig")) importName.len -= 4;
+
+	if (importName.len != 0 and importName[0] == '@') importName = importName[2 .. importName.len - 1];
+	if (aliasName.len != 0 and aliasName[0] == '@') aliasName = aliasName[2 .. aliasName.len - 1];
+
+	if (std.mem.eql(u8, importName, aliasName)) return true;
+
+	if (std.mem.findLast(u8, importName, "/")) |i| importName = importName[i + 1 ..];
+
+	if (std.mem.findLast(u8, importName, ":")) |i| importName = importName[i + 1 ..];
+	if (std.mem.findLast(u8, aliasName, ":")) |i| aliasName = aliasName[i + 1 ..];
+
+	return std.mem.eql(u8, importName, aliasName);
+}
+
+fn checkImports(ast: *std.zig.Ast) !void {
+	const root = ast.rootDecls();
+	var finishedImports: bool = false;
+
+	for (root) |node| {
+		const isImport: bool = blk: {
+			if (ast.nodeTag(node) != .simple_var_decl) break :blk false;
+			const varDec = ast.simpleVarDecl(node);
+			const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
+			if (varDec.ast.init_node.unwrap()) |index| {
+				switch (ast.nodeTag(index)) {
+					.builtin_call_two => { // @import
+						const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
+						if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
+
+						const builtinData = ast.nodeData(index).opt_node_and_opt_node;
+						const paramToken = builtinData.@"0".unwrap().?;
+						const importName = ast.getNodeSource(paramToken);
+
+						if (!isAliasAllowed(importName, aliasName)) {
+							std.log.err("{s} {s}", .{aliasName, importName});
+							std.debug.print("Encountered import with mismatched name", .{});
+						}
+						break :blk true;
+					},
+					.field_access => { // alias
+						const importName = ast.getNodeSource(index);
+						var importNameToken: []const u8 = "";
+						var split = std.mem.splitScalar(u8, importName, '.');
+						while (split.next()) |next| {
+							importNameToken = next;
+						}
+
+						if (!isAliasAllowed(importNameToken, aliasName)) {
+							if (finishedImports) break :blk false;
+							std.debug.print("Encountered import with mismatched name", .{});
+						}
+						break :blk true;
+					},
+					else => {},
+				}
+			}
+			break :blk true;
+		};
+		if (isImport) {
+			if (finishedImports) {
+				std.debug.print("Encountered import after", .{});
+			}
+		} else {
+			finishedImports = true;
+		}
+	}
+}
+
+fn checkZigFile(data: [:0]const u8, _: []const u8) !void {
+	var ast = try std.zig.Ast.parse(allocator, data, .zig);
+	defer ast.deinit(allocator);
+
+	try checkImports(&ast);
 }
 
 fn checkDirectory(dir: std.Io.Dir) !void {
