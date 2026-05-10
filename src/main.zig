@@ -1,7 +1,7 @@
 const std = @import("std");
-const Ios = std.Io;
+const Io = std.Io;
 
-var io: Ios = undefined;
+var io: Io = undefined;
 var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
@@ -38,12 +38,8 @@ fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex
 	std.log.err("Found formatting error in line {} of file {s}: {s}\n{s}\n{s}^", .{lineNumber, filePath, msg, data[lineStart..lineEnd], startLineChars.items});
 }
 
-fn printErrorWithLocation(msg: []const u8, filePath: []const u8, location: std.zig.Ast.Location, source: [:0]const u8) void {
-	var split = std.mem.splitScalar(u8, source, '\n');
-	for (0..location.line) |_| {
-		_ = split.next();
-	}
-	printError(msg, filePath, split.next().?, location.line_end - location.line_start - 1);
+fn printErrorWithLocation(msg: []const u8, filePath: []const u8, source: []const u8, location: std.zig.Ast.Location, charPtr: [*]const u8) void {
+	printError(msg, filePath, source[location.line_start - location.column .. location.line_end], charPtr - source.ptr - (location.line_start - location.column));
 }
 
 fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
@@ -89,13 +85,12 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 
 						const builtinData = ast.nodeData(index).opt_node_and_opt_node;
 						const paramToken = builtinData.@"0".unwrap().?;
-						const importName = ast.getNodeSource(paramToken);
+						var importName = ast.getNodeSource(paramToken);
+						importName = importName[1 .. importName.len - 1];
 
 						if (!isAliasAllowed(importName, aliasName)) {
 							std.log.err("{s} {s}", .{aliasName, importName});
-							printError("Encountered alias with mismatched name", filePath, ast.source[location.line_start - location.column .. location.line_end], location.line_end - location.line_start + location.column);
-
-							printErrorWithLocation(" Other Encountered alias with mismatched name", filePath, location, ast.source);
+							printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importName.ptr);
 						}
 						break :blk true;
 					},
@@ -109,8 +104,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 
 						if (!isAliasAllowed(importNameToken, aliasName)) {
 							if (finishedImports) break :blk false;
-							printError("Encountered alias with mismatched name", filePath, ast.source[location.line_start - location.column .. location.line_end], location.line_end - location.line_start + location.column);
-							printErrorWithLocation("Other Encountered alias with mismatched name", filePath, location, ast.source);
+							printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importNameToken.ptr);
 						}
 						break :blk true;
 					},
@@ -121,7 +115,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 		};
 		if (isImport) {
 			if (finishedImports) {
-				printErrorWithLocation("Encountered import/alias after import section", filePath, location, ast.source);
+				printErrorWithLocation("Encountered import/alias after import section", filePath, ast.source, location, ast.getNodeSource(node).ptr);
 			}
 		} else {
 			finishedImports = true;
