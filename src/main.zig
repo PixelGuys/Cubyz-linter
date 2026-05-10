@@ -1,5 +1,5 @@
-pub const std = @import("std");
-pub const Io = std.Io;
+const std = @import("std");
+const Io = std.Io;
 
 var io: Io = undefined;
 var allocator: std.mem.Allocator = undefined;
