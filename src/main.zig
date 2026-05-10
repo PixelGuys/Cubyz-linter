@@ -71,21 +71,21 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 			if (ast.nodeTag(node) != .simple_var_decl) break :blk false;
 			const varDec = ast.simpleVarDecl(node);
 			const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
-			const index = varDec.ast.init_node.unwrap().?;
+			const rhsNode = varDec.ast.init_node.unwrap().?;
 
-			switch (ast.nodeTag(index)) {
+			switch (ast.nodeTag(rhsNode)) {
 				.builtin_call_two_comma => { // @import("x",)
-					const token = ast.nodeMainToken(index);
+					const token = ast.nodeMainToken(rhsNode);
 					const importKeyword = ast.tokenSlice(token);
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 					printError("@import should not have a trailing comma.", filePath, ast.source, ast.tokenStart(token));
 					break :blk true;
 				},
 				.builtin_call_two => { // @import("x")
-					const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
+					const importKeyword = ast.tokenSlice(ast.nodeMainToken(rhsNode));
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 
-					const token = ast.nodeMainToken(ast.nodeData(index).opt_node_and_opt_node[0].unwrap().?);
+					const token = ast.nodeMainToken(ast.nodeData(rhsNode).opt_node_and_opt_node[0].unwrap().?);
 					var importName = ast.tokenSlice(token);
 					importName = importName[1 .. importName.len - 1];
 
@@ -95,7 +95,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					break :blk true;
 				},
 				.field_access => { // alias
-					const token = ast.nodeData(index).node_and_token.@"1";
+					const token = ast.nodeData(rhsNode).node_and_token.@"1";
 					const importName = ast.tokenSlice(token);
 
 					if (!isAliasAllowed(importName, aliasName)) {
