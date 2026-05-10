@@ -79,7 +79,13 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 			const index = varDec.ast.init_node.unwrap().?;
 
 			switch (ast.nodeTag(index)) {
-				.builtin_call_two, .builtin_call_two_comma => { // @import
+				.builtin_call_two_comma => { // @import("x",)
+					const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
+					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
+					printErrorWithLocation("@import should not have a trailing comma.", filePath, ast.source, location, ast.getNodeSource(index).ptr);
+					break :blk true;
+				},
+				.builtin_call_two => { // @import("x")
 					const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 
@@ -89,8 +95,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					importName = importName[1 .. importName.len - 1];
 
 					if (!isAliasAllowed(importName, aliasName)) {
-						std.log.err("{s} {s}", .{aliasName, importName});
-						printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importName.ptr);
+						printErrorWithLocation("Encountered import with mismatched name", filePath, ast.source, location, importName.ptr);
 					}
 					break :blk true;
 				},
