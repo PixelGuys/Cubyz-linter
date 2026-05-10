@@ -1,7 +1,7 @@
 const std = @import("std");
-const Io = std.Io;
+const Ios = std.Io;
 
-var io: Io = undefined;
+var io: Ios = undefined;
 var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
@@ -93,7 +93,9 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 
 						if (!isAliasAllowed(importName, aliasName)) {
 							std.log.err("{s} {s}", .{aliasName, importName});
-							printErrorWithLocation("Encountered alias with mismatched name", filePath, location, ast.source);
+							printError("Encountered alias with mismatched name", filePath, ast.source[location.line_start - location.column .. location.line_end], location.line_end - location.line_start + location.column);
+
+							printErrorWithLocation(" Other Encountered alias with mismatched name", filePath, location, ast.source);
 						}
 						break :blk true;
 					},
@@ -107,7 +109,8 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 
 						if (!isAliasAllowed(importNameToken, aliasName)) {
 							if (finishedImports) break :blk false;
-							printErrorWithLocation("Encountered alias with mismatched name", filePath, location, ast.source);
+							printError("Encountered alias with mismatched name", filePath, ast.source[location.line_start - location.column .. location.line_end], location.line_end - location.line_start + location.column);
+							printErrorWithLocation("Other Encountered alias with mismatched name", filePath, location, ast.source);
 						}
 						break :blk true;
 					},
