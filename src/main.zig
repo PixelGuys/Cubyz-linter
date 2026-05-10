@@ -1,4 +1,6 @@
-const std = @import("std");
+const std = @import(
+	"std",
+);
 const Io = std.Io;
 
 var io: Io = undefined;
@@ -76,39 +78,37 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 			if (ast.nodeTag(node) != .simple_var_decl) break :blk false;
 			const varDec = ast.simpleVarDecl(node);
 			const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
+			const index = varDec.ast.init_node.unwrap().?;
 
-			if (varDec.ast.init_node.unwrap()) |index| {
-				switch (ast.nodeTag(index)) {
-					.builtin_call_two => { // @import
-						const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
-						if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
+			switch (ast.nodeTag(index)) {
+				.builtin_call_two, .builtin_call_two_comma => { // @import
+					const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
+					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 
-						const builtinData = ast.nodeData(index).opt_node_and_opt_node;
-						const paramToken = builtinData.@"0".unwrap().?;
-						var importName = ast.getNodeSource(paramToken);
-						importName = importName[1 .. importName.len - 1];
+					const builtinData = ast.nodeData(index).opt_node_and_opt_node;
+					const paramToken = builtinData.@"0".unwrap().?;
+					var importName = ast.getNodeSource(paramToken);
+					importName = importName[1 .. importName.len - 1];
 
-						if (!isAliasAllowed(importName, aliasName)) {
-							std.log.err("{s} {s}", .{aliasName, importName});
-							printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importName.ptr);
-						}
-						break :blk true;
-					},
-					.field_access => { // alias
-						const importName = ast.getNodeSource(index);
-						var split = std.mem.splitBackwardsScalar(u8, importName, '.');
-						const importNameToken = split.next().?;
+					if (!isAliasAllowed(importName, aliasName)) {
+						std.log.err("{s} {s}", .{aliasName, importName});
+						printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importName.ptr);
+					}
+					break :blk true;
+				},
+				.field_access => { // alias
+					const importName = ast.getNodeSource(index);
+					var split = std.mem.splitBackwardsScalar(u8, importName, '.');
+					const importNameToken = split.next().?;
 
-						if (!isAliasAllowed(importNameToken, aliasName)) {
-							if (finishedImports) break :blk false;
-							printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importNameToken.ptr);
-						}
-						break :blk true;
-					},
-					else => break :blk false,
-				}
+					if (!isAliasAllowed(importNameToken, aliasName)) {
+						if (finishedImports) break :blk false;
+						printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importNameToken.ptr);
+					}
+					break :blk true;
+				},
+				else => break :blk false,
 			}
-			break :blk true;
 		};
 		if (isImport) {
 			if (finishedImports) {
