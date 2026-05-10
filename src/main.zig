@@ -6,7 +6,7 @@ var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
 
-fn getLineData(data: []const u8, charIndex: usize) struct {start: usize, end: usize, number: usize} {
+fn getLineData(data: []const u8, charIndex: usize) struct { start: usize, end: usize, number: usize } {
 	var lineStart: usize = 0;
 	var lineNumber: usize = 1;
 	var lineEnd: usize = data.len;
