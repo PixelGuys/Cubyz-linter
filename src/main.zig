@@ -6,7 +6,7 @@ var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
 
-fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex: usize) void {
+fn getLineData(data: []const u8, charIndex: usize) struct {start: usize, end: usize, number: usize} {
 	var lineStart: usize = 0;
 	var lineNumber: usize = 1;
 	var lineEnd: usize = data.len;
@@ -22,10 +22,15 @@ fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex
 			break;
 		}
 	}
+	return .{.start = lineStart, .end = lineEnd, .number = lineNumber};
+}
+
+fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex: usize) void {
+	const line = getLineData(data, charIndex);
 
 	var startLineChars: std.ArrayList(u8) = .empty;
 	defer startLineChars.deinit(allocator);
-	for (data[lineStart..charIndex]) |c| {
+	for (data[line.start..charIndex]) |c| {
 		if (c == '\t') {
 			startLineChars.append(allocator, '\t') catch {};
 		} else {
@@ -35,7 +40,25 @@ fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex
 
 	failed = true;
 
-	std.log.err("Found formatting error in line {} of file {s}: {s}\n{s}\n{s}^", .{lineNumber, filePath, msg, data[lineStart..lineEnd], startLineChars.items});
+	std.log.err("{s}:{}:{}: {s}\n{s}\n{s}^", .{filePath, line.number, charIndex - line.start + 1, msg, data[line.start..line.end], startLineChars.items});
+}
+
+fn printInfo(msg: []const u8, filePath: []const u8, data: []const u8, charIndex: usize) void {
+	const line = getLineData(data, charIndex);
+
+	var startLineChars: std.ArrayList(u8) = .empty;
+	defer startLineChars.deinit(allocator);
+	for (data[line.start..charIndex]) |c| {
+		if (c == '\t') {
+			startLineChars.append(allocator, '\t') catch {};
+		} else {
+			startLineChars.append(allocator, ' ') catch {};
+		}
+	}
+
+	failed = true;
+
+	std.log.info("{s}:{}:{}: {s}\n{s}\n{s}^", .{filePath, line.number, charIndex - line.start + 1, msg, data[line.start..line.end], startLineChars.items});
 }
 
 fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
@@ -64,7 +87,7 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 }
 fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 	const root = ast.rootDecls();
-	var finishedImports: bool = false;
+	var firstNonImportNode: ?std.zig.Ast.Node.Index = null;
 
 	for (root) |node| {
 		const isImport: bool = blk: {
@@ -99,7 +122,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					const importName = ast.tokenSlice(token);
 
 					if (!isAliasAllowed(importName, aliasName)) {
-						if (finishedImports) break :blk false;
+						if (firstNonImportNode != null) break :blk false;
 						printError("Encountered alias with mismatched name", filePath, ast.source, ast.tokenStart(token));
 					}
 					break :blk true;
@@ -108,11 +131,14 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 			}
 		};
 		if (isImport) {
-			if (finishedImports) {
+			if (firstNonImportNode) |nonImportNode| {
 				printError("Encountered import/alias after import section", filePath, ast.source, ast.tokenStart(ast.firstToken(node)));
+				printInfo("determined end of import section", filePath, ast.source, ast.tokenStart(ast.firstToken(nonImportNode)));
 			}
 		} else {
-			finishedImports = true;
+			if (firstNonImportNode == null) {
+				firstNonImportNode = node;
+			}
 		}
 	}
 }
