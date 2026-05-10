@@ -120,7 +120,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					break :blk true;
 				},
 				.field_access => { // alias
-					const token = ast.nodeData(rhsNode).node_and_token.@"1";
+					const token = ast.nodeData(rhsNode).node_and_token[1];
 					const importName = ast.tokenSlice(token);
 
 					if (!isAliasAllowed(importName, aliasName)) {
