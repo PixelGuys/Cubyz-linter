@@ -72,22 +72,21 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 			const varDec = ast.simpleVarDecl(node);
 			const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
 			const index = varDec.ast.init_node.unwrap().?;
-			const token = ast.nodeMainToken(index);
 
 			switch (ast.nodeTag(index)) {
 				.builtin_call_two_comma => { // @import("x",)
+					const token = ast.nodeMainToken(index);
 					const importKeyword = ast.tokenSlice(token);
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 					printError("@import should not have a trailing comma.", filePath, ast.source, ast.tokenStart(token));
 					break :blk true;
 				},
 				.builtin_call_two => { // @import("x")
-					const importKeyword = ast.tokenSlice(token);
+					const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 
-					const builtinData = ast.nodeData(index).opt_node_and_opt_node;
-					const paramToken = builtinData.@"0".unwrap().?;
-					var importName = ast.getNodeSource(paramToken);
+					const token = ast.nodeMainToken(ast.nodeData(index).opt_node_and_opt_node[0].unwrap().?);
+					var importName = ast.tokenSlice(token);
 					importName = importName[1 .. importName.len - 1];
 
 					if (!isAliasAllowed(importName, aliasName)) {
@@ -96,11 +95,10 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					break :blk true;
 				},
 				.field_access => { // alias
-					const importName = ast.getNodeSource(index);
-					var split = std.mem.splitBackwardsScalar(u8, importName, '.');
-					const importNameToken = split.next().?;
+					const token = ast.nodeData(index).node_and_token.@"1";
+					const importName = ast.tokenSlice(token);
 
-					if (!isAliasAllowed(importNameToken, aliasName)) {
+					if (!isAliasAllowed(importName, aliasName)) {
 						if (finishedImports) break :blk false;
 						printError("Encountered alias with mismatched name", filePath, ast.source, ast.tokenStart(token));
 					}
