@@ -53,8 +53,9 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 	if (importName.len != 0 and importName[0] == '@') importName = importName[2 .. importName.len - 1];
 	if (aliasName.len != 0 and aliasName[0] == '@') aliasName = aliasName[2 .. aliasName.len - 1];
 
+	if (std.mem.eql(u8, importName, aliasName)) return true;
+
 	if (std.mem.findLast(u8, importName, "/")) |i| importName = importName[i + 1 ..];
-	if (std.mem.findLast(u8, aliasName, "/")) |i| aliasName = aliasName[i + 1 ..];
 
 	if (std.mem.findLast(u8, importName, ":")) |i| importName = importName[i + 1 ..];
 	if (std.mem.findLast(u8, aliasName, ":")) |i| aliasName = aliasName[i + 1 ..];
