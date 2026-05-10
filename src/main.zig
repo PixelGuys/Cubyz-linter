@@ -38,6 +38,14 @@ fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex
 	std.log.err("Found formatting error in line {} of file {s}: {s}\n{s}\n{s}^", .{lineNumber, filePath, msg, data[lineStart..lineEnd], startLineChars.items});
 }
 
+fn printErrorWithLocation(msg: []const u8, filePath: []const u8, location: std.zig.Ast.Location, source: [:0]const u8) void {
+	var split = std.mem.splitScalar(u8, source, '\n');
+	for (0..location.line) |_| {
+		_ = split.next();
+	}
+	printError(msg, filePath, split.next().?, location.line_end - location.line_start - 1);
+}
+
 fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 	var importName = _importName;
 	var aliasName = _aliasName;
@@ -62,80 +70,55 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 
 	return std.mem.eql(u8, importName, aliasName);
 }
-fn checkImports(data: []const u8, filePath: []const u8) void {
-	var split = std.mem.splitScalar(u8, data, '\n');
+fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
+	const root = ast.rootDecls();
 	var finishedImports: bool = false;
 
-	var buf: [65536]u8 = undefined;
-	while (split.next()) |line| {
-		const lineZ = std.fmt.bufPrintZ(&buf, "{s}", .{line}) catch {
-			printError("Line too long, seriously what are you doing?", filePath, data, line.ptr - data.ptr);
-			continue;
-		};
-		var tokenizer = std.zig.Tokenizer.init(lineZ);
-		var token = tokenizer.next();
-		if (token.tag == .eof) continue;
-		if (token.tag == .doc_comment) continue;
-		if (token.tag == .container_doc_comment) continue;
+	for (root) |node| {
+		const location = ast.tokenLocation(0, ast.firstToken(node));
 		const isImport: bool = blk: {
-			if (line[0] == '\t') break :blk false;
+			if (ast.nodeTag(node) != .simple_var_decl) break :blk false;
+			const varDec = ast.simpleVarDecl(node);
+			const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
 
-			if (token.tag == .keyword_pub) token = tokenizer.next();
-			if (token.tag != .keyword_const) break :blk false;
-			token = tokenizer.next();
-			if (token.tag != .identifier) break :blk false;
-			const aliasName = tokenizer.buffer[token.loc.start..token.loc.end];
-			token = tokenizer.next();
-			if (token.tag != .equal) break :blk false;
+			if (varDec.ast.init_node.unwrap()) |index| {
+				switch (ast.nodeTag(index)) {
+					.builtin_call_two => { // @import
+						const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
+						if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 
-			token = tokenizer.next();
-			switch (token.tag) {
-				.builtin => { // @import
-					const importKeyword = tokenizer.buffer[token.loc.start..token.loc.end];
-					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
-					token = tokenizer.next();
-					if (token.tag != .l_paren) break :blk false;
-					token = tokenizer.next();
-					if (token.tag != .string_literal) break :blk false;
-					const importNameToken = token;
-					token = tokenizer.next();
-					if (token.tag != .r_paren) break :blk false;
-					token = tokenizer.next();
-					if (token.tag != .semicolon) break :blk false;
+						const builtinData = ast.nodeData(index).opt_node_and_opt_node;
+						const paramToken = builtinData.@"0".unwrap().?;
+						const importName = ast.getNodeSource(paramToken);
 
-					const importName = tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end];
-					if (!isAliasAllowed(importName, aliasName)) {
-						std.log.err("{s} {s}", .{aliasName, importName});
-						printError("Encountered import with mismatched name", filePath, data, line.ptr - data.ptr + importNameToken.loc.start);
-					}
-					break :blk true;
-				},
-				.identifier => { // alias
-					var importNameToken = token;
-					var foundPath: bool = false;
-					token = tokenizer.next();
-					if (token.tag == .semicolon) break :blk false; // const x = y; is not an import
-					while (true) {
-						if (token.tag != .period) break :blk false;
-						token = tokenizer.next();
-						if (token.tag != .identifier) break :blk false;
-						importNameToken = token;
-						foundPath = true;
-						token = tokenizer.next();
-						if (token.tag == .semicolon) break;
-					}
-					if (!isAliasAllowed(tokenizer.buffer[importNameToken.loc.start..importNameToken.loc.end], aliasName)) {
-						if (finishedImports) break :blk false;
-						printError("Encountered alias with mismatched name", filePath, data, line.ptr - data.ptr + importNameToken.loc.start);
-					}
-					break :blk true;
-				},
-				else => break :blk false,
+						if (!isAliasAllowed(importName, aliasName)) {
+							std.log.err("{s} {s}", .{aliasName, importName});
+							printErrorWithLocation("Encountered alias with mismatched name", filePath, location, ast.source);
+						}
+						break :blk true;
+					},
+					.field_access => { // alias
+						const importName = ast.getNodeSource(index);
+						var importNameToken: []const u8 = "";
+						var split = std.mem.splitScalar(u8, importName, '.');
+						while (split.next()) |next| {
+							importNameToken = next;
+						}
+
+						if (!isAliasAllowed(importNameToken, aliasName)) {
+							if (finishedImports) break :blk false;
+							printErrorWithLocation("Encountered alias with mismatched name", filePath, location, ast.source);
+						}
+						break :blk true;
+					},
+					else => break :blk false,
+				}
 			}
+			break :blk true;
 		};
 		if (isImport) {
 			if (finishedImports) {
-				printError("Encountered import/alias after import section", filePath, data, line.ptr - data.ptr);
+				printErrorWithLocation("Encountered import/alias after import section", filePath, location, ast.source);
 			}
 		} else {
 			finishedImports = true;
@@ -186,7 +169,12 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 		printError("File should end with a single empty line", filePath, data, data.len - 1);
 	}
 	if (std.mem.endsWith(u8, filePath, ".zig")) {
-		checkImports(data, filePath);
+		const dupe = try std.mem.Allocator.dupeZ(allocator, u8, data);
+		defer allocator.free(dupe);
+		var ast = try std.zig.Ast.parse(allocator, dupe, .zig);
+		defer ast.deinit(allocator);
+
+		checkImports(&ast, filePath);
 	}
 }
 
