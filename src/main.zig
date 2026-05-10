@@ -38,10 +38,6 @@ fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex
 	std.log.err("Found formatting error in line {} of file {s}: {s}\n{s}\n{s}^", .{lineNumber, filePath, msg, data[lineStart..lineEnd], startLineChars.items});
 }
 
-fn printErrorWithLocation(msg: []const u8, filePath: []const u8, source: []const u8, location: std.zig.Ast.Location, charPtr: [*]const u8) void {
-	printError(msg, filePath, source[location.line_start - location.column .. location.line_end], charPtr - source.ptr - (location.line_start - location.column));
-}
-
 fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 	var importName = _importName;
 	var aliasName = _aliasName;
@@ -71,22 +67,22 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 	var finishedImports: bool = false;
 
 	for (root) |node| {
-		const location = ast.tokenLocation(0, ast.firstToken(node));
 		const isImport: bool = blk: {
 			if (ast.nodeTag(node) != .simple_var_decl) break :blk false;
 			const varDec = ast.simpleVarDecl(node);
 			const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
 			const index = varDec.ast.init_node.unwrap().?;
+			const token = ast.nodeMainToken(index);
 
 			switch (ast.nodeTag(index)) {
 				.builtin_call_two_comma => { // @import("x",)
-					const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
+					const importKeyword = ast.tokenSlice(token);
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
-					printErrorWithLocation("@import should not have a trailing comma.", filePath, ast.source, location, ast.getNodeSource(index).ptr);
+					printError("@import should not have a trailing comma.", filePath, ast.source, ast.tokenStart(token));
 					break :blk true;
 				},
 				.builtin_call_two => { // @import("x")
-					const importKeyword = ast.tokenSlice(ast.nodeMainToken(index));
+					const importKeyword = ast.tokenSlice(token);
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
 
 					const builtinData = ast.nodeData(index).opt_node_and_opt_node;
@@ -95,7 +91,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					importName = importName[1 .. importName.len - 1];
 
 					if (!isAliasAllowed(importName, aliasName)) {
-						printErrorWithLocation("Encountered import with mismatched name", filePath, ast.source, location, importName.ptr);
+						printError("Encountered import with mismatched name", filePath, ast.source, ast.tokenStart(token));
 					}
 					break :blk true;
 				},
@@ -106,7 +102,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 
 					if (!isAliasAllowed(importNameToken, aliasName)) {
 						if (finishedImports) break :blk false;
-						printErrorWithLocation("Encountered alias with mismatched name", filePath, ast.source, location, importNameToken.ptr);
+						printError("Encountered alias with mismatched name", filePath, ast.source, ast.tokenStart(token));
 					}
 					break :blk true;
 				},
@@ -115,7 +111,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 		};
 		if (isImport) {
 			if (finishedImports) {
-				printErrorWithLocation("Encountered import/alias after import section", filePath, ast.source, location, ast.getNodeSource(node).ptr);
+				printError("Encountered import/alias after import section", filePath, ast.source, ast.tokenStart(ast.firstToken(node)));
 			}
 		} else {
 			finishedImports = true;
