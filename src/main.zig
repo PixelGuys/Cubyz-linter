@@ -4,7 +4,7 @@ const Io = std.Io;
 const rules = @import("rules/_list.zig");
 
 var io: Io = undefined;
-pub var allocator: std.mem.Allocator = undefined;
+var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
 
