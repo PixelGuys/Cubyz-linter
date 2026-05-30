@@ -6,60 +6,76 @@ var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
 
-fn getLineData(data: []const u8, charIndex: usize) struct { start: usize, end: usize, number: usize } {
-	var lineStart: usize = 0;
-	var lineNumber: usize = 1;
-	var lineEnd: usize = data.len;
-	for (data[0..charIndex], 0..) |c, i| {
-		if (c == '\n') {
-			lineStart = i + 1;
-			lineNumber += 1;
-		}
-	}
-	for (data[charIndex..], charIndex..) |c, i| {
-		if (c == '\n') {
-			lineEnd = i;
-			break;
-		}
-	}
-	return .{.start = lineStart, .end = lineEnd, .number = lineNumber};
-}
+pub const Context = struct {
+	data: [:0]const u8,
+	filePath: []const u8,
 
-fn printError(msg: []const u8, filePath: []const u8, data: []const u8, charIndex: usize) void {
-	const line = getLineData(data, charIndex);
-
-	var startLineChars: std.ArrayList(u8) = .empty;
-	defer startLineChars.deinit(allocator);
-	for (data[line.start..charIndex]) |c| {
-		if (c == '\t') {
-			startLineChars.append(allocator, '\t') catch {};
-		} else {
-			startLineChars.append(allocator, ' ') catch {};
-		}
+	fn init(dir: std.Io.Dir, filePath: []const u8) !Context {
+		return .{
+			.filePath = filePath,
+			.data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0),
+		};
 	}
 
-	failed = true;
-
-	std.log.err("{s}:{}:{}: {s}\n{s}\n{s}^", .{filePath, line.number, charIndex - line.start + 1, msg, data[line.start..line.end], startLineChars.items});
-}
-
-fn printInfo(msg: []const u8, filePath: []const u8, data: []const u8, charIndex: usize) void {
-	const line = getLineData(data, charIndex);
-
-	var startLineChars: std.ArrayList(u8) = .empty;
-	defer startLineChars.deinit(allocator);
-	for (data[line.start..charIndex]) |c| {
-		if (c == '\t') {
-			startLineChars.append(allocator, '\t') catch {};
-		} else {
-			startLineChars.append(allocator, ' ') catch {};
-		}
+	fn deinit(self: Context) void {
+		allocator.free(self.data);
 	}
 
-	failed = true;
+	fn getLineData(data: []const u8, charIndex: usize) struct { start: usize, end: usize, number: usize } {
+		var lineStart: usize = 0;
+		var lineNumber: usize = 1;
+		var lineEnd: usize = data.len;
+		for (data[0..charIndex], 0..) |c, i| {
+			if (c == '\n') {
+				lineStart = i + 1;
+				lineNumber += 1;
+			}
+		}
+		for (data[charIndex..], charIndex..) |c, i| {
+			if (c == '\n') {
+				lineEnd = i;
+				break;
+			}
+		}
+		return .{.start = lineStart, .end = lineEnd, .number = lineNumber};
+	}
 
-	std.log.info("{s}:{}:{}: {s}\n{s}\n{s}^", .{filePath, line.number, charIndex - line.start + 1, msg, data[line.start..line.end], startLineChars.items});
-}
+	pub fn printError(self: Context, msg: []const u8, charIndex: usize) void {
+		const line = getLineData(self.data, charIndex);
+
+		var startLineChars: std.ArrayList(u8) = .empty;
+		defer startLineChars.deinit(allocator);
+		for (self.data[line.start..charIndex]) |c| {
+			if (c == '\t') {
+				startLineChars.append(allocator, '\t') catch {};
+			} else {
+				startLineChars.append(allocator, ' ') catch {};
+			}
+		}
+
+		failed = true;
+
+		std.log.err("{s}:{}:{}: {s}\n{s}\n{s}^", .{self.filePath, line.number, charIndex - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
+	}
+
+	pub fn printInfo(self: Context, msg: []const u8, charIndex: usize) void {
+		const line = getLineData(self.data, charIndex);
+
+		var startLineChars: std.ArrayList(u8) = .empty;
+		defer startLineChars.deinit(allocator);
+		for (self.data[line.start..charIndex]) |c| {
+			if (c == '\t') {
+				startLineChars.append(allocator, '\t') catch {};
+			} else {
+				startLineChars.append(allocator, ' ') catch {};
+			}
+		}
+
+		failed = true;
+
+		std.log.info("{s}:{}:{}: {s}\n{s}\n{s}^", .{self.filePath, line.number, charIndex - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
+	}
+};
 
 fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 	var importName = _importName;
@@ -87,7 +103,7 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 
 	return std.mem.eql(u8, importName, aliasName);
 }
-fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
+fn checkImports(ctx: Context, ast: *std.zig.Ast) void {
 	const root = ast.rootDecls();
 	var firstNonImportNode: ?std.zig.Ast.Node.Index = null;
 
@@ -103,7 +119,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					const token = ast.nodeMainToken(rhsNode);
 					const importKeyword = ast.tokenSlice(token);
 					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
-					printError("@import should not have a trailing comma.", filePath, ast.source, ast.tokenStart(token));
+					ctx.printError("@import should not have a trailing comma.", ast.tokenStart(token));
 					break :blk true;
 				},
 				.builtin_call_two => { // @import("x")
@@ -115,7 +131,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 					importName = importName[1 .. importName.len - 1];
 
 					if (!isAliasAllowed(importName, aliasName)) {
-						printError("Encountered import with mismatched name", filePath, ast.source, ast.tokenStart(token));
+						ctx.printError("Encountered import with mismatched name", ast.tokenStart(token));
 					}
 					break :blk true;
 				},
@@ -125,7 +141,7 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 
 					if (!isAliasAllowed(importName, aliasName)) {
 						if (firstNonImportNode != null) break :blk false;
-						printError("Encountered alias with mismatched name", filePath, ast.source, ast.tokenStart(token));
+						ctx.printError("Encountered alias with mismatched name", ast.tokenStart(token));
 					}
 					break :blk true;
 				},
@@ -134,8 +150,8 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 		};
 		if (isImport) {
 			if (firstNonImportNode) |nonImportNode| {
-				printError("Encountered import/alias after import section", filePath, ast.source, ast.tokenStart(ast.firstToken(node)));
-				printInfo("determined end of import section", filePath, ast.source, ast.tokenStart(ast.firstToken(nonImportNode)));
+				ctx.printError("Encountered import/alias after import section", ast.tokenStart(ast.firstToken(node)));
+				ctx.printInfo("determined end of import section", ast.tokenStart(ast.firstToken(nonImportNode)));
 			}
 		} else {
 			if (firstNonImportNode == null) {
@@ -146,32 +162,32 @@ fn checkImports(ast: *std.zig.Ast, filePath: []const u8) void {
 }
 
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
-	const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
-	defer allocator.free(data);
-	var ast = try std.zig.Ast.parse(allocator, data, .zig);
+	const ctx: Context = try .init(dir, filePath);
+	defer ctx.deinit();
+	var ast = try std.zig.Ast.parse(allocator, ctx.data, .zig);
 	defer ast.deinit(allocator);
 
 	var lineStart: bool = true;
 
-	for (data, 0..) |c, i| {
+	for (ctx.data, 0..) |c, i| {
 		switch (c) {
 			'\n' => {
 				lineStart = true;
-				if (i != 0 and (data[i - 1] == ' ' or data[i - 1] == '\t')) {
-					printError("Line contains trailing whitespaces. Please remove them.", filePath, data, i - 1);
+				if (i != 0 and (ctx.data[i - 1] == ' ' or ctx.data[i - 1] == '\t')) {
+					ctx.printError("Line contains trailing whitespaces. Please remove them.", i - 1);
 				}
 			},
 			'\r' => {
-				printError("Incorrect line ending \\r. Please configure your editor to use LF instead CRLF.", filePath, data, i);
+				ctx.printError("Incorrect line ending \\r. Please configure your editor to use LF instead CRLF.", i);
 			},
 			' ' => {
 				if (lineStart) {
-					printError("Incorrect indentation. Please use tabs instead of spaces.", filePath, data, i);
+					ctx.printError("Incorrect indentation. Please use tabs instead of spaces.", i);
 				}
 			},
 			'/' => {
-				if (data[i + 1] == '/' and data[i + 2] != '/' and data[i + 2] != '!' and data[i + 2] != ' ' and data[i + 2] != '\n' and (i == 0 or (data[i - 1] != ':' and data[i - 1] != '"'))) {
-					printError("Comments should include a space before text, ex: // whatever", filePath, data, i + 2);
+				if (ctx.data[i + 1] == '/' and ctx.data[i + 2] != '/' and ctx.data[i + 2] != '!' and ctx.data[i + 2] != ' ' and ctx.data[i + 2] != '\n' and (i == 0 or (ctx.data[i - 1] != ':' and ctx.data[i - 1] != '"'))) {
+					ctx.printError("Comments should include a space before text, ex: // whatever", i + 2);
 				}
 				lineStart = false;
 			},
@@ -181,16 +197,16 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 			},
 		}
 	}
-	if (std.mem.containsAtLeast(u8, data, 1, "anyerror" ++ "!")) {
+	if (std.mem.containsAtLeast(u8, ctx.data, 1, "anyerror" ++ "!")) {
 		if (!std.mem.eql(u8, filePath, "network/protocols.zig")) {
 			std.log.err("Found anyerror" ++ "! in file {s}. Please avoid the use of anyerror" ++ "! instead please define an error set.", .{filePath});
 		}
 	}
-	if (data.len != 0 and data[data.len - 1] != '\n' or (data.len > 2 and data[data.len - 2] == '\n')) {
-		printError("File should end with a single empty line", filePath, data, data.len - 1);
+	if (ctx.data.len != 0 and ctx.data[ctx.data.len - 1] != '\n' or (ctx.data.len > 2 and ctx.data[ctx.data.len - 2] == '\n')) {
+		ctx.printError("File should end with a single empty line", ctx.data.len - 1);
 	}
 	if (std.mem.endsWith(u8, filePath, ".zig")) {
-		checkImports(&ast, filePath);
+		checkImports(ctx, &ast);
 	}
 }
 
