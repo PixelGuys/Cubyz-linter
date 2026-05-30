@@ -30,6 +30,31 @@ pub const Context = struct {
 		};
 	}
 
+	fn initFromStdin(filePath: []const u8) !Context {
+		const stdin = std.Io.File.stdin();
+		const len = try stdin.length(io);
+		if (len > 10*1024*1024) return error.TooBig;
+
+		const buffer = try allocator.alloc(u8, len);
+		defer allocator.free(buffer);
+
+		var reader = stdin.reader(io, buffer);
+		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
+
+		var ast: ?std.zig.Ast = null;
+		errdefer if (ast) |*a| a.deinit(allocator);
+		if (std.mem.endsWith(u8, filePath, ".zig")) {
+			ast = try std.zig.Ast.parse(allocator, data, .zig);
+		} else if (std.mem.endsWith(u8, filePath, ".zon")) {
+			ast = try std.zig.Ast.parse(allocator, data, .zon);
+		}
+		return .{
+			.data = data,
+			.ast = ast,
+			.filePath = filePath,
+		};
+	}
+
 	fn deinit(self: *Context) void {
 		allocator.free(self.data);
 		if (self.ast) |*ast| ast.deinit(allocator);
@@ -89,6 +114,15 @@ pub const Context = struct {
 	}
 };
 
+fn checkStdin(filePath: []const u8) !void {
+	var ctx: Context = try .initFromStdin(filePath);
+	defer ctx.deinit();
+
+	inline for (comptime std.meta.declarations(rules)) |rule| {
+		@field(rules, rule.name).check(ctx);
+	}
+}
+
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 	var ctx: Context = try .init(dir, filePath);
 	defer ctx.deinit();
@@ -124,7 +158,17 @@ pub fn main(init: std.process.Init) !void {
 		std.process.exit(1);
 	}
 
+	var stdin = false;
+
 	for (args[1..]) |arg| {
+		if (std.mem.eql(u8, args[1], "--stdin")) {
+			stdin = true;
+			continue;
+		}
+		if (stdin) {
+			try checkStdin(arg);
+			return;
+		}
 		const stat = try std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true});
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
