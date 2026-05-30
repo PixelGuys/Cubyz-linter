@@ -8,17 +8,24 @@ var failed: bool = false;
 
 pub const Context = struct {
 	data: [:0]const u8,
+	ast: std.zig.Ast,
 	filePath: []const u8,
 
 	fn init(dir: std.Io.Dir, filePath: []const u8) !Context {
+		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
+		errdefer allocator.free(data);
+		const ast = try std.zig.Ast.parse(allocator, data, .zig);
+		errdefer ast.deinit(allocator);
 		return .{
+			.data = data,
+			.ast = ast,
 			.filePath = filePath,
-			.data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0),
 		};
 	}
 
-	fn deinit(self: Context) void {
+	fn deinit(self: *Context) void {
 		allocator.free(self.data);
+		self.ast.deinit(allocator);
 	}
 
 	fn getLineData(data: []const u8, charIndex: usize) struct { start: usize, end: usize, number: usize } {
@@ -103,7 +110,8 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 
 	return std.mem.eql(u8, importName, aliasName);
 }
-fn checkImports(ctx: Context, ast: *std.zig.Ast) void {
+fn checkImports(ctx: Context) void {
+	const ast = ctx.ast;
 	const root = ast.rootDecls();
 	var firstNonImportNode: ?std.zig.Ast.Node.Index = null;
 
@@ -162,10 +170,8 @@ fn checkImports(ctx: Context, ast: *std.zig.Ast) void {
 }
 
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
-	const ctx: Context = try .init(dir, filePath);
+	var ctx: Context = try .init(dir, filePath);
 	defer ctx.deinit();
-	var ast = try std.zig.Ast.parse(allocator, ctx.data, .zig);
-	defer ast.deinit(allocator);
 
 	var lineStart: bool = true;
 
@@ -206,7 +212,7 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 		ctx.printError("File should end with a single empty line", ctx.data.len - 1);
 	}
 	if (std.mem.endsWith(u8, filePath, ".zig")) {
-		checkImports(ctx, &ast);
+		checkImports(ctx);
 	}
 }
 
