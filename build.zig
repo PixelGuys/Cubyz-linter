@@ -14,6 +14,8 @@ pub fn build(b: *std.Build) void {
 		}),
 	});
 
+	exe.root_module.addImport("main", exe.root_module);
+
 	b.installArtifact(exe);
 
 	const run_step = b.step("run", "Run the app");

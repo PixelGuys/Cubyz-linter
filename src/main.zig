@@ -1,6 +1,8 @@
 const std = @import("std");
 const Io = std.Io;
 
+const rules = @import("rules/_list.zig");
+
 var io: Io = undefined;
 var allocator: std.mem.Allocator = undefined;
 
@@ -173,6 +175,10 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 	var ctx: Context = try .init(dir, filePath);
 	defer ctx.deinit();
 
+	inline for (comptime std.meta.declarations(rules)) |rule| {
+		@field(rules, rule.name).check(ctx);
+	}
+
 	var lineStart: bool = true;
 
 	for (ctx.data, 0..) |c, i| {
@@ -201,11 +207,6 @@ fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 			else => {
 				lineStart = false;
 			},
-		}
-	}
-	if (std.mem.containsAtLeast(u8, ctx.data, 1, "anyerror" ++ "!")) {
-		if (!std.mem.eql(u8, filePath, "network/protocols.zig")) {
-			std.log.err("Found anyerror" ++ "! in file {s}. Please avoid the use of anyerror" ++ "! instead please define an error set.", .{filePath});
 		}
 	}
 	if (ctx.data.len != 0 and ctx.data[ctx.data.len - 1] != '\n' or (ctx.data.len > 2 and ctx.data[ctx.data.len - 2] == '\n')) {
