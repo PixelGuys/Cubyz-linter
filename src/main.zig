@@ -10,14 +10,19 @@ var failed: bool = false;
 
 pub const Context = struct {
 	data: [:0]const u8,
-	ast: std.zig.Ast,
+	ast: ?std.zig.Ast,
 	filePath: []const u8,
 
 	fn init(dir: std.Io.Dir, filePath: []const u8) !Context {
 		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-		const ast = try std.zig.Ast.parse(allocator, data, .zig);
-		errdefer ast.deinit(allocator);
+		var ast: ?std.zig.Ast = null;
+		errdefer if (ast) |*a| a.deinit(allocator);
+		if (std.mem.endsWith(u8, filePath, ".zig")) {
+			ast = try std.zig.Ast.parse(allocator, data, .zig);
+		} else if (std.mem.endsWith(u8, filePath, ".zon")) {
+			ast = try std.zig.Ast.parse(allocator, data, .zon);
+		}
 		return .{
 			.data = data,
 			.ast = ast,
@@ -27,7 +32,7 @@ pub const Context = struct {
 
 	fn deinit(self: *Context) void {
 		allocator.free(self.data);
-		self.ast.deinit(allocator);
+		if (self.ast) |*ast| ast.deinit(allocator);
 	}
 
 	fn getLineData(data: []const u8, charIndex: usize) struct { start: usize, end: usize, number: usize } {

@@ -30,7 +30,7 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 }
 
 pub fn check(ctx: main.Context) void {
-	const ast = ctx.ast;
+	const ast = ctx.ast orelse return;
 	const root = ast.rootDecls();
 	var firstNonImportNode: ?std.zig.Ast.Node.Index = null;
 
