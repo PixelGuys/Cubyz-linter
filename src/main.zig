@@ -85,8 +85,6 @@ pub const Context = struct {
 			}
 		}
 
-		failed = true;
-
 		std.log.info("{s}:{}:{}: {s}\n{s}\n{s}^", .{self.filePath, line.number, charIndex - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
 	}
 };
