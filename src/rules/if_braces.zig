@@ -9,7 +9,7 @@ pub fn check(ctx: main.Context) void {
 		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
 		if (ast.fullIf(node)) |ifData| {
 			const thenExpression = ifData.ast.then_expr;
-			switch(ast.nodeTag(thenExpression)) {
+			switch (ast.nodeTag(thenExpression)) {
 				.block, .block_semicolon, .block_two, .block_two_semicolon => {},
 				else => {
 					if (std.mem.findScalar(u8, ast.getNodeSource(node), '\n')) |index| {
@@ -18,7 +18,7 @@ pub fn check(ctx: main.Context) void {
 				},
 			}
 			const elseExpression = ifData.ast.else_expr.unwrap() orelse continue;
-			switch(ast.nodeTag(elseExpression)) {
+			switch (ast.nodeTag(elseExpression)) {
 				.block, .block_semicolon, .block_two, .block_two_semicolon, .if_simple, .@"if" => {},
 				else => {
 					const elseStart = ast.tokenStart(ifData.else_token);
