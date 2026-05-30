@@ -33,7 +33,6 @@ pub const Context = struct {
 	fn initFromStdin(filePath: []const u8) !Context {
 		const stdin = std.Io.File.stdin();
 		const len = try stdin.length(io);
-		if (len > 10*1024*1024) return error.TooBig;
 
 		const buffer = try allocator.alloc(u8, len);
 		defer allocator.free(buffer);
