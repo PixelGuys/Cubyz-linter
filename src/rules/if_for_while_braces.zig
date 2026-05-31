@@ -9,7 +9,7 @@ fn checkType(ctx: main.Context, comptime typ: enum {@"if", @"while", @"for"}, no
 		.block, .block_semicolon, .block_two, .block_two_semicolon => {},
 		else => {
 			if (std.mem.findScalar(u8, ast.getNodeSource(node), '\n')) |index| {
-				ctx.printError(@tagName(typ) ++ " expression should either be on a single line or use a block", ast.tokenStart(ast.nodeMainToken(node)) + index);
+				ctx.printError(@tagName(typ) ++ " expression should either be on a single line or use a block", ast.tokenStart(ast.firstToken(node)) + index);
 			}
 		},
 	}
