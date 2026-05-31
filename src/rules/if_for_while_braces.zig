@@ -3,7 +3,7 @@ const std = @import("std");
 const main = @import("main");
 
 fn checkType(ctx: main.Context, comptime typ: enum { @"if", @"while", @"for" }, node: std.zig.Ast.Node.Index, thenExpression: std.zig.Ast.Node.Index, elseToken: std.zig.Ast.TokenIndex, elseExpression: ?std.zig.Ast.Node.Index) void {
-	const ast = ctx.ast orelse unreachable;
+	const ast = ctx.ast.?;
 
 	switch (ast.nodeTag(thenExpression)) {
 		.block, .block_semicolon, .block_two, .block_two_semicolon => {},
