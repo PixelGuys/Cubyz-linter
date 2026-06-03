@@ -32,12 +32,8 @@ pub const Context = struct {
 
 	fn initFromStdin(filePath: []const u8) !Context {
 		const stdin = std.Io.File.stdin();
-		const len = try stdin.length(io);
 
-		const buffer = try allocator.alloc(u8, len);
-		defer allocator.free(buffer);
-
-		var reader = stdin.reader(io, buffer);
+		var reader = stdin.reader(io, &.{});
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 
 		var ast: ?std.zig.Ast = null;
@@ -160,7 +156,7 @@ pub fn main(init: std.process.Init) !void {
 	var stdin = false;
 
 	for (args[1..]) |arg| {
-		if (std.mem.eql(u8, args[1], "--stdin")) {
+		if (std.mem.eql(u8, arg, "--stdin")) {
 			stdin = true;
 			continue;
 		}
