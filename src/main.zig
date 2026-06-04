@@ -5,6 +5,7 @@ const rules = @import("rules/_list.zig");
 
 var io: Io = undefined;
 var allocator: std.mem.Allocator = undefined;
+var stdin: std.Io.File = .stdin();
 
 var failed: bool = false;
 
@@ -35,12 +36,12 @@ pub const Context = struct {
 	}
 
 	fn initFromStdin(filePath: []const u8) !Context {
-		const stdin = std.Io.File.stdin();
 		var reader = stdin.reader(io, &.{});
 
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-		return .init(data, filePath);
+
+		return try .init(data, filePath);
 	}
 
 	fn deinit(self: *Context) void {
@@ -146,17 +147,12 @@ pub fn main(init: std.process.Init) !void {
 		std.process.exit(1);
 	}
 
-	var stdin = false;
-
 	for (args[1..]) |arg| {
-		if (std.mem.eql(u8, arg, "--stdin")) {
-			stdin = true;
-			continue;
-		}
-		if (stdin) {
+		if (!try stdin.isTty(io)) {
 			try checkStdin(arg);
 			return;
 		}
+
 		const stat = try std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true});
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
