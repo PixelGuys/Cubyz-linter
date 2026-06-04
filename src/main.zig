@@ -103,22 +103,23 @@ pub const Context = struct {
 	}
 };
 
-fn checkStdin(filePath: []const u8) !void {
-	var ctx: Context = try .initFromStdin(filePath);
-	defer ctx.deinit();
-
+fn check(ctx: Context) void {
+	if (ctx.data.len == 0) return;
 	inline for (comptime std.meta.declarations(rules)) |rule| {
 		@field(rules, rule.name).check(ctx);
 	}
 }
 
+fn checkStdin(filePath: []const u8) !void {
+	var ctx: Context = try .initFromStdin(filePath);
+	defer ctx.deinit();
+	check(ctx);
+}
+
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
 	var ctx: Context = try .initFromFile(dir, filePath);
 	defer ctx.deinit();
-
-	inline for (comptime std.meta.declarations(rules)) |rule| {
-		@field(rules, rule.name).check(ctx);
-	}
+	check(ctx);
 }
 
 fn checkDirectory(dir: std.Io.Dir) !void {
