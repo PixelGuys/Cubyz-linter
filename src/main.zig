@@ -13,9 +13,7 @@ pub const Context = struct {
 	ast: ?std.zig.Ast,
 	filePath: []const u8,
 
-	fn init(dir: std.Io.Dir, filePath: []const u8) !Context {
-		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
-		errdefer allocator.free(data);
+	fn init(data: [:0]const u8, filePath: []const u8) !Context {
 		var ast: ?std.zig.Ast = null;
 		errdefer if (ast) |*a| a.deinit(allocator);
 		if (std.mem.endsWith(u8, filePath, ".zig")) {
@@ -30,24 +28,19 @@ pub const Context = struct {
 		};
 	}
 
+	fn initFromFile(dir: std.Io.Dir, filePath: []const u8) !Context {
+		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
+		errdefer allocator.free(data);
+		return .init(data, filePath);
+	}
+
 	fn initFromStdin(filePath: []const u8) !Context {
 		const stdin = std.Io.File.stdin();
-
 		var reader = stdin.reader(io, &.{});
-		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 
-		var ast: ?std.zig.Ast = null;
-		errdefer if (ast) |*a| a.deinit(allocator);
-		if (std.mem.endsWith(u8, filePath, ".zig")) {
-			ast = try std.zig.Ast.parse(allocator, data, .zig);
-		} else if (std.mem.endsWith(u8, filePath, ".zon")) {
-			ast = try std.zig.Ast.parse(allocator, data, .zon);
-		}
-		return .{
-			.data = data,
-			.ast = ast,
-			.filePath = filePath,
-		};
+		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
+		errdefer allocator.free(data);
+		return .init(data, filePath);
 	}
 
 	fn deinit(self: *Context) void {
@@ -119,7 +112,7 @@ fn checkStdin(filePath: []const u8) !void {
 }
 
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
-	var ctx: Context = try .init(dir, filePath);
+	var ctx: Context = try .initFromFile(dir, filePath);
 	defer ctx.deinit();
 
 	inline for (comptime std.meta.declarations(rules)) |rule| {
