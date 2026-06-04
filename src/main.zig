@@ -5,7 +5,7 @@ const rules = @import("rules/_list.zig");
 
 var io: Io = undefined;
 var allocator: std.mem.Allocator = undefined;
-var stdin: std.Io.File = .stdin();
+var stdin: std.Io.File = undefined;
 
 var failed: bool = false;
 
@@ -138,6 +138,7 @@ fn checkDirectory(dir: std.Io.Dir) !void {
 pub fn main(init: std.process.Init) !void {
 	allocator = init.gpa;
 	io = init.io;
+	stdin = .stdin();
 
 	const arena: std.mem.Allocator = init.arena.allocator();
 	const args = try init.minimal.args.toSlice(arena);
