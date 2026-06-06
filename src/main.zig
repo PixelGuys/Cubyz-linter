@@ -151,10 +151,11 @@ pub fn main(init: std.process.Init) !void {
 	const arena: std.mem.Allocator = init.arena.allocator();
 	const args = try init.minimal.args.toSlice(arena);
 
-	const stdinStat = try stdin.stat(io);
-	if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
-		if (try checkStdin(args)) return;
-	}
+	if (stdin.stat(io)) |stdinStat| {
+		if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
+			if (try checkStdin(args)) return;
+		}
+	} else |_| {}
 
 	if (args.len <= 1) {
 		std.log.err("Missing arguments, expected list of directories, found nothing.", .{});
