@@ -115,7 +115,8 @@ fn check(ctx: Context) void {
 	}
 }
 
-fn checkStdin(filePath: []const u8) !bool {
+fn checkStdin(args: []const []const u8) !bool {
+	const filePath = if (args.len > 1) args[1] else "<stdin>";
 	var ctx = try Context.initFromStdin(filePath) orelse return false;
 	defer ctx.deinit();
 	check(ctx);
@@ -150,18 +151,17 @@ pub fn main(init: std.process.Init) !void {
 	const arena: std.mem.Allocator = init.arena.allocator();
 	const args = try init.minimal.args.toSlice(arena);
 
+	const stdinStat = try stdin.stat(io);
+	if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
+		if (try checkStdin(args)) return;
+	}
+
 	if (args.len <= 1) {
 		std.log.err("Missing arguments, expected list of directories, found nothing.", .{});
 		std.process.exit(1);
 	}
 
-	const stdinStat = try stdin.stat(io);
-
 	for (args[1..]) |arg| {
-		if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
-			if (try checkStdin(arg)) return;
-		}
-
 		const stat = try std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true});
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
