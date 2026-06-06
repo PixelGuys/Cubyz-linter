@@ -32,7 +32,7 @@ pub const Context = struct {
 	fn initFromFile(dir: std.Io.Dir, filePath: []const u8) !Context {
 		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-		return .init(data, filePath);
+		return try .init(data, filePath);
 	}
 
 	fn initFromStdin(filePath: []const u8) !?Context {
