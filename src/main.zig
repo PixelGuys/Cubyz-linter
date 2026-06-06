@@ -35,11 +35,16 @@ pub const Context = struct {
 		return .init(data, filePath);
 	}
 
-	fn initFromStdin(filePath: []const u8) !Context {
+	fn initFromStdin(filePath: []const u8) !?Context {
 		var reader = stdin.reader(io, &.{});
 
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
+
+		if (data.len == 0) {
+			allocator.free(data);
+			return null;
+		}
 
 		return try .init(data, filePath);
 	}
@@ -110,10 +115,11 @@ fn check(ctx: Context) void {
 	}
 }
 
-fn checkStdin(filePath: []const u8) !void {
-	var ctx: Context = try .initFromStdin(filePath);
+fn checkStdin(filePath: []const u8) !bool {
+	var ctx = try Context.initFromStdin(filePath) orelse return false;
 	defer ctx.deinit();
 	check(ctx);
+	return true;
 }
 
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
@@ -150,9 +156,8 @@ pub fn main(init: std.process.Init) !void {
 	}
 
 	for (args[1..]) |arg| {
-		if (!try stdin.isTty(io)) {
-			try checkStdin(arg);
-			return;
+		if (!try stdin.isTty(io)) { //DEBUG
+			if (try checkStdin(arg)) return;
 		}
 
 		const stat = try std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true});
