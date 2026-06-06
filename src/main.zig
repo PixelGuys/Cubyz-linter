@@ -155,8 +155,10 @@ pub fn main(init: std.process.Init) !void {
 		std.process.exit(1);
 	}
 
+	const stdinStat = try stdin.stat(io);
+
 	for (args[1..]) |arg| {
-		if (!try stdin.isTty(io)) {
+		if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
 			if (try checkStdin(arg)) return;
 		}
 
