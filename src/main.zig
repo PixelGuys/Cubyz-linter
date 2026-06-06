@@ -156,7 +156,7 @@ pub fn main(init: std.process.Init) !void {
 	}
 
 	for (args[1..]) |arg| {
-		if (!try stdin.isTty(io)) { //DEBUG
+		if (!try stdin.isTty(io)) {
 			if (try checkStdin(arg)) return;
 		}
 
