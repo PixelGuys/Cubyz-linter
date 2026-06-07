@@ -103,7 +103,6 @@ pub const Context = struct {
 };
 
 fn check(ctx: Context) void {
-	if (ctx.data.len == 0) return;
 	inline for (comptime std.meta.declarations(rules)) |rule| {
 		@field(rules, rule.name).check(ctx);
 	}
