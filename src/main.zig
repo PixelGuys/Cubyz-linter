@@ -35,17 +35,11 @@ pub const Context = struct {
 		return try .init(data, filePath);
 	}
 
-	fn initFromStdin() !?Context {
+	fn initFromStdin() !Context {
 		var reader = stdin.reader(io, &.{});
 
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-
-		if (data.len == 0) {
-			allocator.free(data);
-			return null;
-		}
-
 		return try .init(data, "<stdin>");
 	}
 
@@ -115,11 +109,10 @@ fn check(ctx: Context) void {
 	}
 }
 
-fn checkStdin() !bool {
-	var ctx = try Context.initFromStdin() orelse return false;
+fn checkStdin() !void {
+	var ctx: Context = try .initFromStdin();
 	defer ctx.deinit();
 	check(ctx);
-	return true;
 }
 
 fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
@@ -151,14 +144,10 @@ pub fn main(init: std.process.Init) !void {
 	const args = try init.minimal.args.toSlice(arena);
 
 	if (args.len <= 1) {
-		if (stdin.stat(io)) |stdinStat| {
-			if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
-				if (try checkStdin()) return;
-			}
-		} else |_| {}
-
-		std.log.err("Missing arguments, expected list of directories or stdin input, found nothing.", .{});
-		std.process.exit(1);
+		checkStdin() catch |err| {
+			std.log.err("Unable to read from stdin: {t}", .{err});
+			std.process.exit(1);
+		};
 	}
 
 	for (args[1..]) |arg| {
