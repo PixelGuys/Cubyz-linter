@@ -35,7 +35,7 @@ pub const Context = struct {
 		return try .init(data, filePath);
 	}
 
-	fn initFromStdin(filePath: []const u8) !?Context {
+	fn initFromStdin() !?Context {
 		var reader = stdin.reader(io, &.{});
 
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
@@ -46,7 +46,7 @@ pub const Context = struct {
 			return null;
 		}
 
-		return try .init(data, filePath);
+		return try .init(data, "<stdin>");
 	}
 
 	fn deinit(self: *Context) void {
@@ -115,9 +115,8 @@ fn check(ctx: Context) void {
 	}
 }
 
-fn checkStdin(args: []const []const u8) !bool {
-	const filePath = if (args.len > 1) args[1] else "<stdin>";
-	var ctx = try Context.initFromStdin(filePath) orelse return false;
+fn checkStdin() !bool {
+	var ctx = try Context.initFromStdin() orelse return false;
 	defer ctx.deinit();
 	check(ctx);
 	return true;
@@ -151,14 +150,14 @@ pub fn main(init: std.process.Init) !void {
 	const arena: std.mem.Allocator = init.arena.allocator();
 	const args = try init.minimal.args.toSlice(arena);
 
-	if (stdin.stat(io)) |stdinStat| {
-		if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
-			if (try checkStdin(args)) return;
-		}
-	} else |_| {}
-
 	if (args.len <= 1) {
-		std.log.err("Missing arguments, expected list of directories, found nothing.", .{});
+		if (stdin.stat(io)) |stdinStat| {
+			if (stdinStat.kind == .file or stdinStat.kind == .named_pipe or stdinStat.kind == .unix_domain_socket) {
+				if (try checkStdin()) return;
+			}
+		} else |_| {}
+
+		std.log.err("Missing arguments, expected list of directories or stdin input, found nothing.", .{});
 		std.process.exit(1);
 	}
 
