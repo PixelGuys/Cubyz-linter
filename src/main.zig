@@ -13,9 +13,7 @@ pub const Context = struct {
 	ast: ?std.zig.Ast,
 	filePath: []const u8,
 
-	fn init(dir: std.Io.Dir, filePath: []const u8) !Context {
-		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
-		errdefer allocator.free(data);
+	fn init(data: [:0]const u8, filePath: []const u8) !Context {
 		var ast: ?std.zig.Ast = null;
 		errdefer if (ast) |*a| a.deinit(allocator);
 		if (std.mem.endsWith(u8, filePath, ".zig")) {
@@ -28,6 +26,21 @@ pub const Context = struct {
 			.ast = ast,
 			.filePath = filePath,
 		};
+	}
+
+	fn initFromFile(dir: std.Io.Dir, filePath: []const u8) !Context {
+		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
+		errdefer allocator.free(data);
+		return try .init(data, filePath);
+	}
+
+	fn initFromStdin() !Context {
+		const stdin: std.Io.File = .stdin();
+		var reader = stdin.reader(io, &.{});
+
+		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
+		errdefer allocator.free(data);
+		return try .init(data, "<stdin>");
 	}
 
 	fn deinit(self: *Context) void {
@@ -89,13 +102,22 @@ pub const Context = struct {
 	}
 };
 
-fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
-	var ctx: Context = try .init(dir, filePath);
-	defer ctx.deinit();
-
+fn check(ctx: Context) void {
 	inline for (comptime std.meta.declarations(rules)) |rule| {
 		@field(rules, rule.name).check(ctx);
 	}
+}
+
+fn checkStdin() !void {
+	var ctx: Context = try .initFromStdin();
+	defer ctx.deinit();
+	check(ctx);
+}
+
+fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
+	var ctx: Context = try .initFromFile(dir, filePath);
+	defer ctx.deinit();
+	check(ctx);
 }
 
 fn checkDirectory(dir: std.Io.Dir) !void {
@@ -120,8 +142,10 @@ pub fn main(init: std.process.Init) !void {
 	const args = try init.minimal.args.toSlice(arena);
 
 	if (args.len <= 1) {
-		std.log.err("Missing arguments, expected list of directories, found nothing.", .{});
-		std.process.exit(1);
+		checkStdin() catch |err| {
+			std.log.err("Unable to read from stdin: {t}", .{err});
+			std.process.exit(1);
+		};
 	}
 
 	for (args[1..]) |arg| {
