@@ -6,3 +6,4 @@ pub const if_for_while_braces = @import("if_for_while_braces.zig");
 pub const imports = @import("imports.zig");
 pub const tab_indentation = @import("tab_indentation.zig");
 pub const trailing_space = @import("trailing_space.zig");
+pub const orelse_unreachable = @import("orelse_unreachable.zig");
