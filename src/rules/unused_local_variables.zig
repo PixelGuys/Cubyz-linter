@@ -13,8 +13,16 @@ pub fn check(ctx: main.Context) void {
 
 	for (0..ast.nodes.len) |nodeIndex| {
 		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
-		if (ast.nodeTag(node) == .identifier) {
-			_ = identifiers.getOrPut(main.allocator, ast.getNodeSource(node)) catch @panic("OOM");
+		switch (ast.nodeTag(node)) {
+			.identifier => {
+				_ = identifiers.getOrPut(main.allocator, ast.getNodeSource(node)) catch @panic("OOM");
+			},
+			.field_access => {
+				const token = ast.nodeData(node).node_and_token[1];
+				const name = ast.tokenSlice(token);
+				_ = identifiers.getOrPut(main.allocator, name) catch @panic("OOM");
+			},
+			else => continue,
 		}
 	}
 
