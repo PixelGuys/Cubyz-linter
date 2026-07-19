@@ -8,9 +8,6 @@ pub fn check(ctx: main.Context) void {
 	var identifiers: std.StringHashMapUnmanaged(void) = .empty;
 	defer identifiers.deinit(main.allocator);
 
-	identifiers.put(main.allocator, "std", {}) catch @panic("OOM");
-	identifiers.put(main.allocator, "main", {}) catch @panic("OOM");
-
 	for (0..ast.nodes.len) |nodeIndex| {
 		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
 		switch (ast.nodeTag(node)) {
