@@ -29,53 +29,54 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 	return std.mem.eql(u8, importName, aliasName);
 }
 
+pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Index, mode: enum {errorOnAliasNameMismatch, ignoreAliasNameMismatch}) bool {
+	if (ast.nodeTag(node) != .simple_var_decl) return false;
+	const varDec = ast.simpleVarDecl(node);
+	const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
+	const rhsNode = varDec.ast.init_node.unwrap().?;
+
+	switch (ast.nodeTag(rhsNode)) {
+		.builtin_call_two_comma => { // @import("x",)
+			const token = ast.nodeMainToken(rhsNode);
+			const importKeyword = ast.tokenSlice(token);
+			if (!std.mem.eql(u8, importKeyword, "@import")) return false;
+			ctx.printError("@import should not have a trailing comma.", ast.tokenStart(token));
+			return true;
+		},
+		.builtin_call_two => { // @import("x")
+			const importKeyword = ast.tokenSlice(ast.nodeMainToken(rhsNode));
+			if (!std.mem.eql(u8, importKeyword, "@import")) return false;
+
+			const token = ast.nodeMainToken(ast.nodeData(rhsNode).opt_node_and_opt_node[0].unwrap().?);
+			var importName = ast.tokenSlice(token);
+			importName = importName[1 .. importName.len - 1];
+
+			if (!isAliasAllowed(importName, aliasName)) {
+				ctx.printError("Encountered import with mismatched name", ast.tokenStart(token));
+			}
+			return true;
+		},
+		.field_access => { // alias
+			const token = ast.nodeData(rhsNode).node_and_token[1];
+			const importName = ast.tokenSlice(token);
+
+			if (!isAliasAllowed(importName, aliasName)) {
+				if (mode == .ignoreAliasNameMismatch) return false;
+				ctx.printError("Encountered alias with mismatched name", ast.tokenStart(token));
+			}
+			return true;
+		},
+		else => return false,
+	}
+}
+
 pub fn check(ctx: main.Context) void {
 	const ast = ctx.ast orelse return;
 	const root = ast.rootDecls();
 	var firstNonImportNode: ?std.zig.Ast.Node.Index = null;
 
 	for (root) |node| {
-		const isImport: bool = blk: {
-			if (ast.nodeTag(node) != .simple_var_decl) break :blk false;
-			const varDec = ast.simpleVarDecl(node);
-			const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
-			const rhsNode = varDec.ast.init_node.unwrap().?;
-
-			switch (ast.nodeTag(rhsNode)) {
-				.builtin_call_two_comma => { // @import("x",)
-					const token = ast.nodeMainToken(rhsNode);
-					const importKeyword = ast.tokenSlice(token);
-					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
-					ctx.printError("@import should not have a trailing comma.", ast.tokenStart(token));
-					break :blk true;
-				},
-				.builtin_call_two => { // @import("x")
-					const importKeyword = ast.tokenSlice(ast.nodeMainToken(rhsNode));
-					if (!std.mem.eql(u8, importKeyword, "@import")) break :blk false;
-
-					const token = ast.nodeMainToken(ast.nodeData(rhsNode).opt_node_and_opt_node[0].unwrap().?);
-					var importName = ast.tokenSlice(token);
-					importName = importName[1 .. importName.len - 1];
-
-					if (!isAliasAllowed(importName, aliasName)) {
-						ctx.printError("Encountered import with mismatched name", ast.tokenStart(token));
-					}
-					break :blk true;
-				},
-				.field_access => { // alias
-					const token = ast.nodeData(rhsNode).node_and_token[1];
-					const importName = ast.tokenSlice(token);
-
-					if (!isAliasAllowed(importName, aliasName)) {
-						if (firstNonImportNode != null) break :blk false;
-						ctx.printError("Encountered alias with mismatched name", ast.tokenStart(token));
-					}
-					break :blk true;
-				},
-				else => break :blk false,
-			}
-		};
-		if (isImport) {
+		if (isImport(ctx, ast, node, if(firstNonImportNode != null) .ignoreAliasNameMismatch else .errorOnAliasNameMismatch)) {
 			if (firstNonImportNode) |nonImportNode| {
 				ctx.printError("Encountered import/alias after import section", ast.tokenStart(ast.firstToken(node)));
 				ctx.printInfo("determined end of import section", ast.tokenStart(ast.firstToken(nonImportNode)));

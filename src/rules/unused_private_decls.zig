@@ -21,6 +21,7 @@ pub fn check(ctx: main.Context) void {
 
 	for (root) |node| {
 		if (ast.nodeTag(node) != .simple_var_decl) continue;
+		if (main.rules.imports.isImport(ctx, ast, node, .ignoreAliasNameMismatch)) continue;
 		const varDec = ast.simpleVarDecl(node);
 		if (varDec.visib_token != null) continue;
 		const name = ast.tokenSlice(varDec.ast.mut_token + 1);
