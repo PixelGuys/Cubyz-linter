@@ -44,7 +44,7 @@ pub fn check(ctx: main.Context) void {
 			},
 			.fn_proto, .fn_proto_simple, .fn_proto_one, .fn_proto_multi => |tag| {
 				var buffer: [1]std.zig.Ast.Node.Index = undefined;
-				const functionProto = switch(tag) {
+				const functionProto = switch (tag) {
 					.fn_proto => ast.fnProto(node),
 					.fn_proto_simple => ast.fnProtoSimple(&buffer, node),
 					.fn_proto_one => ast.fnProtoOne(&buffer, node),
