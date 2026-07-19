@@ -29,7 +29,7 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 	return std.mem.eql(u8, importName, aliasName);
 }
 
-pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Index, mode: enum {errorOnAliasNameMismatch, ignoreAliasNameMismatch}) bool {
+pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Index, mode: enum { errorOnAliasNameMismatch, ignoreAliasNameMismatch }) bool {
 	if (ast.nodeTag(node) != .simple_var_decl) return false;
 	const varDec = ast.simpleVarDecl(node);
 	const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
@@ -76,7 +76,7 @@ pub fn check(ctx: main.Context) void {
 	var firstNonImportNode: ?std.zig.Ast.Node.Index = null;
 
 	for (root) |node| {
-		if (isImport(ctx, ast, node, if(firstNonImportNode != null) .ignoreAliasNameMismatch else .errorOnAliasNameMismatch)) {
+		if (isImport(ctx, ast, node, if (firstNonImportNode != null) .ignoreAliasNameMismatch else .errorOnAliasNameMismatch)) {
 			if (firstNonImportNode) |nonImportNode| {
 				ctx.printError("Encountered import/alias after import section", ast.tokenStart(ast.firstToken(node)));
 				ctx.printInfo("determined end of import section", ast.tokenStart(ast.firstToken(nonImportNode)));
