@@ -7,4 +7,4 @@ pub const imports = @import("imports.zig");
 pub const tab_indentation = @import("tab_indentation.zig");
 pub const trailing_space = @import("trailing_space.zig");
 pub const orelse_unreachable = @import("orelse_unreachable.zig");
-pub const unused_private_decls = @import("unused_private_decls.zig");
+pub const unused_local_variables = @import("unused_local_variables.zig");

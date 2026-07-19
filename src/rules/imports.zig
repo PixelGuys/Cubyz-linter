@@ -33,7 +33,7 @@ pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Inde
 	if (ast.nodeTag(node) != .simple_var_decl) return false;
 	const varDec = ast.simpleVarDecl(node);
 	const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
-	const rhsNode = varDec.ast.init_node.unwrap().?;
+	const rhsNode = varDec.ast.init_node.unwrap() orelse return false;
 
 	switch (ast.nodeTag(rhsNode)) {
 		.builtin_call_two_comma => { // @import("x",)

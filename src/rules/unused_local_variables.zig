@@ -4,7 +4,6 @@ const main = @import("main");
 
 pub fn check(ctx: main.Context) void {
 	const ast = ctx.ast orelse return;
-	const root = ast.rootDecls();
 
 	var identifiers: std.StringHashMapUnmanaged(void) = .empty;
 	defer identifiers.deinit(main.allocator);
@@ -19,7 +18,8 @@ pub fn check(ctx: main.Context) void {
 		}
 	}
 
-	for (root) |node| {
+	for (0..ast.nodes.len) |nodeIndex| {
+		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
 		if (ast.nodeTag(node) != .simple_var_decl) continue;
 		if (main.rules.imports.isImport(ctx, ast, node, .ignoreAliasNameMismatch)) continue;
 		const varDec = ast.simpleVarDecl(node);
