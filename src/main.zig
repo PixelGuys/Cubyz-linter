@@ -16,10 +16,10 @@ pub const Context = struct {
 	fn init(data: [:0]const u8, filePath: []const u8) !Context {
 		var ast: ?std.zig.Ast = null;
 		errdefer if (ast) |*a| a.deinit(allocator);
-		if (std.mem.endsWith(u8, filePath, ".zig")) {
-			ast = try std.zig.Ast.parse(allocator, data, .zig);
-		} else if (std.mem.endsWith(u8, filePath, ".zon")) {
+		if (std.mem.endsWith(u8, filePath, ".zon")) {
 			ast = try std.zig.Ast.parse(allocator, data, .zon);
+		} else {
+			ast = std.zig.Ast.parse(allocator, data, .zig) catch null;
 		}
 		return .{
 			.data = data,
