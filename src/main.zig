@@ -34,13 +34,13 @@ pub const Context = struct {
 		return try .init(data, filePath);
 	}
 
-	fn initFromStdin() !Context {
+	fn initFromStdin(fileName: []const u8) !Context {
 		const stdin: std.Io.File = .stdin();
 		var reader = stdin.reader(io, &.{});
 
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-		return try .init(data, "<stdin>");
+		return try .init(data, fileName);
 	}
 
 	fn deinit(self: *Context) void {
@@ -108,8 +108,8 @@ fn check(ctx: Context) void {
 	}
 }
 
-fn checkStdin() !void {
-	var ctx: Context = try .initFromStdin();
+fn checkStdin(fileName: []const u8) !void {
+	var ctx: Context = try .initFromStdin(fileName);
 	defer ctx.deinit();
 	check(ctx);
 }
@@ -141,15 +141,34 @@ pub fn main(init: std.process.Init) !void {
 	const arena: std.mem.Allocator = init.arena.allocator();
 	const args = try init.minimal.args.toSlice(arena);
 
-	if (args.len <= 1) {
-		checkStdin() catch |err| {
+	var fileArgumentsStart: usize = 1;
+	if (args.len <= 2) stdin: {
+		const fileNameOption = "--stdin-filename=";
+		const name = blk: {
+			if (args.len <= 1) break :blk "<stdin>";
+			if (!std.mem.startsWith(u8, args[1], fileNameOption)) break :stdin;
+			fileArgumentsStart += 1;
+			if (args[1].len == fileNameOption.len) {
+				std.log.err("No filename given to --stdin-filename", .{});
+				break :stdin;
+			}
+			break :blk args[1][fileNameOption.len..];
+		};
+
+		checkStdin(name) catch |err| {
 			std.log.err("Unable to read from stdin: {t}", .{err});
 			std.process.exit(1);
 		};
 	}
 
-	for (args[1..]) |arg| {
-		const stat = try std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true});
+	for (args[fileArgumentsStart..]) |arg| {
+		const stat = std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true}) catch |err| {
+			if (err == error.FileNotFound) {
+				std.log.err("FileNotFound: {s}", .{arg});
+				return;
+			}
+			return err;
+		};
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
 			defer dir.close(io);
