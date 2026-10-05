@@ -6,7 +6,7 @@ pub fn check(ctx: main.Context) void {
 	const ast = ctx.ast orelse return;
 
 	for (0..ast.nodes.len) |nodeIndex| {
-		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
+		const node: std.zig.Ast.Node.Index = @fromBackingInt(@intCast(nodeIndex));
 		if (ast.nodeTag(node) != .@"orelse") continue;
 
 		const mainToken = ast.nodeMainToken(node);

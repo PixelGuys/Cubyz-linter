@@ -29,7 +29,7 @@ pub fn check(ctx: main.Context) void {
 	const ast = ctx.ast orelse return;
 
 	for (0..ast.nodes.len) |nodeIndex| {
-		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
+		const node: std.zig.Ast.Node.Index = @fromBackingInt(@intCast(nodeIndex));
 		if (ast.fullIf(node)) |ifData| {
 			checkType(ctx, .@"if", node, ifData.ast.then_expr, ifData.else_token, ifData.ast.else_expr.unwrap());
 		}

@@ -9,7 +9,7 @@ pub fn check(ctx: main.Context) void {
 
 	var buffer: [2]std.zig.Ast.Node.Index = undefined;
 	for (0..ast.nodes.len) |nodeIndex| {
-		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
+		const node: std.zig.Ast.Node.Index = @fromBackingInt(@intCast(nodeIndex));
 		if (ast.nodeTag(node) != .simple_var_decl) continue;
 		const varDec = ast.simpleVarDecl(node);
 		if (varDec.ast.type_node.unwrap() != null) continue;

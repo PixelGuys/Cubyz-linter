@@ -9,7 +9,7 @@ pub fn check(ctx: main.Context) void {
 	defer identifiers.deinit(main.allocator);
 
 	for (0..ast.nodes.len) |nodeIndex| {
-		const node: std.zig.Ast.Node.Index = @enumFromInt(nodeIndex);
+		const node: std.zig.Ast.Node.Index = @fromBackingInt(@intCast(nodeIndex));
 		switch (ast.nodeTag(node)) {
 			.identifier => {
 				_ = identifiers.getOrPut(main.allocator, ast.getNodeSource(node)) catch @panic("OOM");
