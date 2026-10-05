@@ -17,9 +17,9 @@ pub const Context = struct {
 		var ast: ?std.zig.Ast = null;
 		errdefer if (ast) |*a| a.deinit(allocator);
 		if (std.mem.endsWith(u8, filePath, ".zig")) {
-			ast = try std.zig.Ast.parse(allocator, data, .zig);
+			ast = try std.zig.Ast.parse(allocator, data, .{.mode = .zig});
 		} else if (std.mem.endsWith(u8, filePath, ".zon")) {
-			ast = try std.zig.Ast.parse(allocator, data, .zon);
+			ast = try std.zig.Ast.parse(allocator, data, .{.mode = .zon});
 		}
 		return .{
 			.data = data,
@@ -104,7 +104,7 @@ pub const Context = struct {
 
 fn check(ctx: Context) void {
 	inline for (comptime std.meta.declarations(rules)) |rule| {
-		@field(rules, rule.name).check(ctx);
+		@field(rules, rule).check(ctx);
 	}
 }
 
