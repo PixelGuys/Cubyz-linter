@@ -16,7 +16,7 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.VERSION }}
-      - run: wget -O ./Cubyz-fmt https://github.com/PixelGuys/Cubyz-formatter/releases/download/0.16.0+0/Cubyz-fmt-x86_64-linux
+      - run: wget -O ./Cubyz-fmt https://github.com/PixelGuys/Cubyz-formatter/releases/download/0.17.0+0/Cubyz-fmt-x86_64-linux
       - run: chmod +x ./Cubyz-fmt
       - run: |
           if ./Cubyz-fmt src/ *.zig *.zon | grep -q . ; then

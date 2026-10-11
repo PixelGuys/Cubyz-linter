@@ -32,6 +32,7 @@ fn isAliasAllowed(_importName: []const u8, _aliasName: []const u8) bool {
 pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Index, mode: enum { errorOnAliasNameMismatch, ignoreAliasNameMismatch }) bool {
 	if (ast.nodeTag(node) != .simple_var_decl) return false;
 	const varDec = ast.simpleVarDecl(node);
+	if (varDec.ast.type_node.unwrap() != null) return false;
 	const aliasName = ast.tokenSlice(varDec.ast.mut_token + 1);
 	const rhsNode = varDec.ast.init_node.unwrap() orelse return false;
 
