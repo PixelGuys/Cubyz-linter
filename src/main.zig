@@ -10,9 +10,9 @@ var failed: bool = false;
 
 const usage =
 	\\Usage:
-	\\  Cubyz-linter [FILE|DIRECTORY]...             lint the files provided / files in the directories provided.
-	\\  Cubyz-linter --stdin-filename=FILENAME    lint the content provided via stdin, the filename is needed to know if its a zig / zon file.
-	\\  Cubyz-linter -h --help                      print this help list
+	\\  Cubyz-linter [FILE|DIRECTORY]...        lint the files provided / files in the directories provided.
+	\\  Cubyz-linter --stdin-filename=FILENAME  lint the content provided via stdin, the filename is needed to know if its a zig / zon file.
+	\\  Cubyz-linter -h --help                  print this help list
 	\\
 ;
 
