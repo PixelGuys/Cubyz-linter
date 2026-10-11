@@ -141,13 +141,15 @@ pub fn main(init: std.process.Init) !void {
 	const arena: std.mem.Allocator = init.arena.allocator();
 	const args = try init.minimal.args.toSlice(arena);
 
-	var fileArgumentsStart: usize = 1;
+	defer {
+		if (failed) std.process.exit(1);
+	}
+
 	if (args.len <= 2) stdin: {
 		const fileNameOption = "--stdin-filename=";
 		const name = blk: {
 			if (args.len <= 1) break :blk "<stdin>";
 			if (!std.mem.startsWith(u8, args[1], fileNameOption)) break :stdin;
-			fileArgumentsStart += 1;
 			if (args[1].len == fileNameOption.len) {
 				std.log.err("No filename given to --stdin-filename", .{});
 				break :stdin;
@@ -159,15 +161,14 @@ pub fn main(init: std.process.Init) !void {
 			std.log.err("Unable to read from stdin: {t}", .{err});
 			std.process.exit(1);
 		};
+		return;
 	}
 
-	for (args[fileArgumentsStart..]) |arg| {
+	for (args[1..]) |arg| {
 		const stat = std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true}) catch |err| {
-			if (err == error.FileNotFound) {
-				std.log.err("FileNotFound: {s}", .{arg});
-				return;
-			}
-			return err;
+			std.log.err("Error while trying to read metadata of file '{s}'. 'Error: {t}", .{arg, err});
+			failed = true;
+			break;
 		};
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
@@ -177,6 +178,4 @@ pub fn main(init: std.process.Init) !void {
 			try checkFile(std.Io.Dir.cwd(), arg);
 		}
 	}
-
-	if (failed) std.process.exit(1);
 }
