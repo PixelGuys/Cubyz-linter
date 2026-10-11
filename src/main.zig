@@ -168,6 +168,7 @@ pub fn main(init: std.process.Init) !void {
 	if (std.mem.startsWith(u8, args[1], fileNameOption)) {
 		if (args[1].len == fileNameOption.len) {
 			std.log.err("No filename given to --stdin-filename", .{});
+			std.process.exit(1);
 		}
 
 		checkStdin(args[1][fileNameOption.len..]) catch |err| {
