@@ -8,6 +8,14 @@ pub var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
 
+const usage =
+	\\Usage:
+	\\  Cubyz-linter [FILE|DIRECTORY]...             lint the files provided / files in the directories provided.
+	\\  Cubyz-linter --stdin-filename=FILENAME    lint the content provided via stdin, the filename is needed to know if its a zig / zon file.
+	\\  Cubyz-linter -h --help                      print this help list
+	\\
+;
+
 pub const Context = struct {
 	data: [:0]const u8,
 	ast: ?std.zig.Ast,
@@ -145,19 +153,24 @@ pub fn main(init: std.process.Init) !void {
 		if (failed) std.process.exit(1);
 	}
 
-	if (args.len <= 2) stdin: {
-		const fileNameOption = "--stdin-filename=";
-		const name = blk: {
-			if (args.len <= 1) break :blk "<stdin>";
-			if (!std.mem.startsWith(u8, args[1], fileNameOption)) break :stdin;
-			if (args[1].len == fileNameOption.len) {
-				std.log.err("No filename given to --stdin-filename", .{});
-				break :stdin;
-			}
-			break :blk args[1][fileNameOption.len..];
-		};
+	if (args.len <= 1) {
+		std.log.err("Missing arguments.\n" ++ usage, .{});
+		std.process.exit(1);
+	}
 
-		checkStdin(name) catch |err| {
+	if (std.mem.eql(u8, args[1], "-h") or std.mem.eql(u8, args[1], "--help")) {
+		var stdout = std.Io.File.stdout().writer(init.io, &.{});
+		try stdout.interface.print(usage, .{});
+		return;
+	}
+
+	const fileNameOption = "--stdin-filename=";
+	if (std.mem.startsWith(u8, args[1], fileNameOption)) {
+		if (args[1].len == fileNameOption.len) {
+			std.log.err("No filename given to --stdin-filename", .{});
+		}
+
+		checkStdin(args[1][fileNameOption.len..]) catch |err| {
 			std.log.err("Unable to read from stdin: {t}", .{err});
 			std.process.exit(1);
 		};
@@ -167,7 +180,7 @@ pub fn main(init: std.process.Init) !void {
 	for (args[1..]) |arg| {
 		const stat = std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true}) catch |err| {
 			std.log.err("Error while trying to read metadata of file '{s}'. 'Error: {t}", .{arg, err});
-			std.process.exit(1);
+			return err;
 		};
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
