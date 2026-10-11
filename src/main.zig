@@ -167,8 +167,7 @@ pub fn main(init: std.process.Init) !void {
 	for (args[1..]) |arg| {
 		const stat = std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true}) catch |err| {
 			std.log.err("Error while trying to read metadata of file '{s}'. 'Error: {t}", .{arg, err});
-			failed = true;
-			break;
+			std.process.exit(1);
 		};
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
