@@ -8,6 +8,14 @@ pub var allocator: std.mem.Allocator = undefined;
 
 var failed: bool = false;
 
+const usage =
+	\\Usage:
+	\\  Cubyz-linter [FILE|DIRECTORY]...        lint the files provided / files in the directories provided.
+	\\  Cubyz-linter --stdin-filename=FILENAME  lint the content provided via stdin, the filename is needed to know if its a zig / zon file.
+	\\  Cubyz-linter -h, --help                 print this help list
+	\\
+;
+
 pub const Context = struct {
 	data: [:0]const u8,
 	ast: ?std.zig.Ast,
@@ -34,13 +42,13 @@ pub const Context = struct {
 		return try .init(data, filePath);
 	}
 
-	fn initFromStdin() !Context {
+	fn initFromStdin(fileName: []const u8) !Context {
 		const stdin: std.Io.File = .stdin();
 		var reader = stdin.reader(io, &.{});
 
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-		return try .init(data, "<stdin>");
+		return try .init(data, fileName);
 	}
 
 	fn deinit(self: *Context) void {
@@ -108,8 +116,8 @@ fn check(ctx: Context) void {
 	}
 }
 
-fn checkStdin() !void {
-	var ctx: Context = try .initFromStdin();
+fn checkStdin(fileName: []const u8) !void {
+	var ctx: Context = try .initFromStdin(fileName);
 	defer ctx.deinit();
 	check(ctx);
 }
@@ -141,15 +149,40 @@ pub fn main(init: std.process.Init) !void {
 	const arena: std.mem.Allocator = init.arena.allocator();
 	const args = try init.minimal.args.toSlice(arena);
 
+	defer {
+		if (failed) std.process.exit(1);
+	}
+
 	if (args.len <= 1) {
-		checkStdin() catch |err| {
+		std.log.err("Missing arguments.\n" ++ usage, .{});
+		std.process.exit(1);
+	}
+
+	if (std.mem.eql(u8, args[1], "-h") or std.mem.eql(u8, args[1], "--help")) {
+		var stdout = std.Io.File.stdout().writer(init.io, &.{});
+		try stdout.interface.print(usage, .{});
+		return;
+	}
+
+	const fileNameOption = "--stdin-filename=";
+	if (std.mem.startsWith(u8, args[1], fileNameOption)) {
+		if (args[1].len == fileNameOption.len) {
+			std.log.err("No filename given to --stdin-filename", .{});
+			std.process.exit(1);
+		}
+
+		checkStdin(args[1][fileNameOption.len..]) catch |err| {
 			std.log.err("Unable to read from stdin: {t}", .{err});
 			std.process.exit(1);
 		};
+		return;
 	}
 
 	for (args[1..]) |arg| {
-		const stat = try std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true});
+		const stat = std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true}) catch |err| {
+			std.log.err("Error while trying to read metadata of file '{s}'. 'Error: {t}", .{arg, err});
+			return err;
+		};
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
 			defer dir.close(io);
@@ -158,6 +191,4 @@ pub fn main(init: std.process.Init) !void {
 			try checkFile(std.Io.Dir.cwd(), arg);
 		}
 	}
-
-	if (failed) std.process.exit(1);
 }
