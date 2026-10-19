@@ -49,12 +49,10 @@ pub fn check(ctx: main.Context) void {
 
 		const containerType = ast.tokenSlice(container.ast.main_token);
 
-		var foundMember: bool = false;
-		for (container.ast.members) |index| {
+		const foundMember = for (container.ast.members) |index| {
 			const tag = ast.nodeTag(index);
 			if (tag == .container_field_init) {
-				foundMember = true;
-				break;
+				break true;
 			}
 
 			// we also need to check for functions where the first parameter is the container.
@@ -63,10 +61,9 @@ pub fn check(ctx: main.Context) void {
 			if (fnProto.ast.params.len < 1) continue;
 			const param = fnProto.ast.params[0];
 			if (std.mem.eql(u8, ast.getNodeSource(param), ast.tokenSlice(varDec.ast.mut_token + 1))) {
-				foundMember = true;
-				break;
+				break true;
 			}
-		}
+		} else false;
 		if (foundMember) {
 			checkPascalCase(ctx, name, nameStart);
 		} else {
