@@ -45,6 +45,7 @@ pub fn check(ctx: main.Context) void {
 
 		const rhsNode = varDec.ast.init_node.unwrap() orelse continue;
 		const container = ast.fullContainerDecl(&buffer, rhsNode) orelse continue;
+		if (container.ast.members.len == 0) continue;
 
 		const containerType = ast.tokenSlice(container.ast.main_token);
 
