@@ -55,6 +55,16 @@ pub fn check(ctx: main.Context) void {
 				foundMember = true;
 				break;
 			}
+
+			// we also need to check for functions where the first parameter is the container.
+			var fnBuffer: [1]std.zig.Ast.Node.Index = undefined;
+			const fnProto = ast.fullFnProto(&fnBuffer, index) orelse continue;
+			if (fnProto.ast.params.len < 1) continue;
+			const param = fnProto.ast.params[0];
+			if (std.mem.eql(u8, ast.getNodeSource(param), ast.tokenSlice(varDec.ast.mut_token + 1))) {
+				foundMember = true;
+				break;
+			}
 		}
 		if (foundMember) {
 			checkPascalCase(ctx, name, nameStart);
