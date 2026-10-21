@@ -16,7 +16,7 @@ const usage =
 	\\
 ;
 
-pub const Context = struct {
+pub const Context = struct { // MARK: Context
 	data: [:0]const u8,
 	ast: ?std.zig.Ast,
 	filePath: []const u8,
