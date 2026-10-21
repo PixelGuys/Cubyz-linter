@@ -75,38 +75,102 @@ pub const Context = struct {
 		return .{.start = lineStart, .end = lineEnd, .number = lineNumber};
 	}
 
-	pub fn printError(self: Context, msg: []const u8, charIndex: usize) void {
-		const line = getLineData(self.data, charIndex);
+	pub const ErrorLocation = struct {
+		start: usize,
+		end: usize,
+
+		pub fn fromSpan(span: std.zig.Ast.Span) ErrorLocation {
+			return .{
+				.start = span.start,
+				.end = span.end,
+			};
+		}
+
+		pub fn singleChar(charIndex: usize) ErrorLocation {
+			return .{
+				.start = charIndex,
+				.end = charIndex,
+			};
+		}
+
+		pub fn charWithlength(charIndex: usize, len: usize) ErrorLocation {
+			return .{
+				.start = charIndex,
+				.end = charIndex + len,
+			};
+		}
+	};
+
+	pub fn printError(self: Context, msg: []const u8, loc: ErrorLocation) void {
+		const line = getLineData(self.data, loc.start);
+		const endLine = getLineData(self.data, loc.end);
+		var actualLoc = loc;
+		if (line.number != endLine.number) {
+			// multiple line errors currently not supported
+			// will just be interpreted as until line end
+
+			actualLoc.end = line.end;
+		}
 
 		var startLineChars: std.ArrayList(u8) = .empty;
 		defer startLineChars.deinit(allocator);
-		for (self.data[line.start..charIndex]) |c| {
+		for (self.data[line.start..actualLoc.start]) |c| {
 			if (c == '\t') {
 				startLineChars.append(allocator, '\t') catch {};
 			} else {
 				startLineChars.append(allocator, ' ') catch {};
+			}
+		}
+		startLineChars.append(allocator, '^') catch {};
+		if (actualLoc.start + 1 < self.data.len and actualLoc.start < actualLoc.end) {
+			for (self.data[actualLoc.start .. actualLoc.end - 1]) |c| {
+				if (c == '\t') { // this is a wierd case...
+					startLineChars.append(allocator, '\t') catch {};
+				} else {
+					startLineChars.append(allocator, '~') catch {};
+				}
 			}
 		}
 
 		failed = true;
 
-		std.log.err("{s}:{}:{}: {s}\n{s}\n{s}^", .{self.filePath, line.number, charIndex - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
+		std.log.err("{s}:{}:{}-{}: {s}\n{s}\n{s}", .{self.filePath, line.number, actualLoc.start - line.start + 1, actualLoc.end - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
 	}
 
-	pub fn printInfo(self: Context, msg: []const u8, charIndex: usize) void {
-		const line = getLineData(self.data, charIndex);
+	pub fn printInfo(self: Context, msg: []const u8, loc: ErrorLocation) void {
+		const line = getLineData(self.data, loc.start);
+		const endLine = getLineData(self.data, loc.end);
+		var actualLoc = loc;
+		if (line.number != endLine.number) {
+			// multiple line errors currently not supported
+			// will just be interpreted as until line end
+
+			actualLoc.end = line.end;
+		}
 
 		var startLineChars: std.ArrayList(u8) = .empty;
 		defer startLineChars.deinit(allocator);
-		for (self.data[line.start..charIndex]) |c| {
+		for (self.data[line.start..actualLoc.start]) |c| {
 			if (c == '\t') {
 				startLineChars.append(allocator, '\t') catch {};
 			} else {
 				startLineChars.append(allocator, ' ') catch {};
 			}
 		}
+		startLineChars.append(allocator, '^') catch {};
+		if (actualLoc.start + 1 < self.data.len and actualLoc.start < actualLoc.end) {
+			for (self.data[actualLoc.start + 1 .. actualLoc.end]) |c| {
+				if (c == '\t') { // this is a wierd case...
+					startLineChars.append(allocator, '\t') catch {};
+				} else {
+					startLineChars.append(allocator, '~') catch {};
+				}
+			}
+		}
 
-		std.log.info("{s}:{}:{}: {s}\n{s}\n{s}^", .{self.filePath, line.number, charIndex - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
+		failed = true;
+
+		std.log.info("{s}:{}:{}-{}: {s}\n{s}\n{s}", .{self.filePath, line.number, actualLoc.start - line.start + 1, actualLoc.end - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
 	}
 };
 

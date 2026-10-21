@@ -36,7 +36,7 @@ pub fn check(ctx: main.Context) void {
 				if (varDec.visib_token != null) continue;
 				const name = ast.tokenSlice(varDec.ast.mut_token + 1);
 				if (!identifiers.contains(name)) {
-					ctx.printError("Unused declaration", ast.tokenStart(varDec.firstToken()));
+					ctx.printError("Unused declaration", .fromSpan(ast.tokenToSpan(varDec.firstToken() + 1)));
 				}
 			},
 			.fn_proto, .fn_proto_simple, .fn_proto_one, .fn_proto_multi => |tag| {
@@ -51,7 +51,7 @@ pub fn check(ctx: main.Context) void {
 				if (functionProto.visib_token != null) continue;
 				const name = ast.tokenSlice(functionProto.name_token orelse continue);
 				if (!identifiers.contains(name)) {
-					ctx.printError("Unused declaration", ast.tokenStart(functionProto.firstToken()));
+					ctx.printError("Unused declaration", .fromSpan(ast.tokenToSpan(functionProto.firstToken() + 1)));
 				}
 			},
 			else => continue,
