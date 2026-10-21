@@ -3,7 +3,10 @@ const std = @import("std");
 const main = @import("main");
 
 fn checkPascalCase(ctx: main.Context, name: []const u8, tokenLocation: usize) void {
-	std.debug.assert(name.len > 0);
+	if (name.len == 0) {
+		ctx.printError("@\"\" is not a valid container name.", tokenLocation);
+		return;
+	}
 
 	if (std.ascii.isLower(name[0])) {
 		ctx.printError("Container names should be in PascalCase", tokenLocation);
@@ -19,6 +22,16 @@ fn checkPascalCase(ctx: main.Context, name: []const u8, tokenLocation: usize) vo
 }
 
 fn checkSnakeCase(ctx: main.Context, name: []const u8, tokenLocation: usize) void {
+	if (name.len == 0) {
+		ctx.printError("@\"\" is not a valid container name.", tokenLocation);
+		return;
+	}
+
+	if (!std.ascii.isLower(name[0])) {
+		ctx.printError("Structs without fields are namespaces and their name should be in snake_case", tokenLocation);
+		return;
+	}
+
 	for (name, 0..) |c, i| {
 		if (std.ascii.isUpper(c) or (!std.ascii.isAlphanumeric(c) and c != '_' and c != ':')) {
 			ctx.printError("Structs without fields are namespaces and their name should be in snake_case", tokenLocation + i);
