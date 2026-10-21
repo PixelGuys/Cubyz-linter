@@ -49,6 +49,11 @@ pub fn check(ctx: main.Context) void {
 
 		const containerType = ast.tokenSlice(container.ast.main_token);
 
+		if (!std.mem.eql(u8, containerType, "struct")) { // non-struct can't be namespaces and so always follow PascalCase
+			checkPascalCase(ctx, name, nameStart);
+			continue;
+		}
+
 		const foundMember = for (container.ast.members) |index| {
 			const tag = ast.nodeTag(index);
 			if (tag == .container_field_init) {
@@ -67,7 +72,6 @@ pub fn check(ctx: main.Context) void {
 		if (foundMember) {
 			checkPascalCase(ctx, name, nameStart);
 		} else {
-			if (!std.mem.eql(u8, containerType, "struct")) continue; // else enums get seen as possible rule breakers
 			checkSnakeCase(ctx, name, nameStart);
 		}
 	}
