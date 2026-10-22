@@ -26,7 +26,6 @@ const LineData = struct {
 	number: usize,
 };
 
-
 pub const ErrorCharIndex = struct {
 	start: usize,
 	end: usize,
@@ -52,8 +51,6 @@ pub const ErrorCharIndex = struct {
 		};
 	}
 };
-
-const lol = enum { l };
 
 /// Just logs every error / info
 const Print = struct {
