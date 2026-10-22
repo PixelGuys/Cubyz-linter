@@ -20,21 +20,25 @@ pub const ErrorLocation = struct {
 	start: usize,
 	end: usize,
 
-	pub fn fromSpan(span: std.zig.Ast.Span) ErrorLocation {
+pub const ErrorCharIndex = struct {
+	start: usize,
+	end: usize,
+
+	pub fn fromSpan(span: std.zig.Ast.Span) ErrorCharIndex {
 		return .{
 			.start = span.start,
 			.end = span.end,
 		};
 	}
 
-	pub fn singleChar(charIndex: usize) ErrorLocation {
+	pub fn singleChar(charIndex: usize) ErrorCharIndex {
 		return .{
 			.start = charIndex,
 			.end = charIndex,
 		};
 	}
 
-	pub fn charWithlength(charIndex: usize, len: usize) ErrorLocation {
+	pub fn charWithlength(charIndex: usize, len: usize) ErrorCharIndex {
 		return .{
 			.start = charIndex,
 			.end = charIndex + len,
@@ -100,32 +104,6 @@ pub const Context = struct { // MARK: Context
 		}
 		return .{.start = lineStart, .end = lineEnd, .number = lineNumber};
 	}
-
-	pub const ErrorCharIndex = struct {
-		start: usize,
-		end: usize,
-
-		pub fn fromSpan(span: std.zig.Ast.Span) ErrorCharIndex {
-			return .{
-				.start = span.start,
-				.end = span.end,
-			};
-		}
-
-		pub fn singleChar(charIndex: usize) ErrorCharIndex {
-			return .{
-				.start = charIndex,
-				.end = charIndex,
-			};
-		}
-
-		pub fn charWithlength(charIndex: usize, len: usize) ErrorCharIndex {
-			return .{
-				.start = charIndex,
-				.end = charIndex + len,
-			};
-		}
-	};
 
 	pub fn printError(self: Context, msg: []const u8, loc: ErrorCharIndex) void {
 		const line = getLineData(self.data, loc.start);
