@@ -10,15 +10,22 @@ var failed: bool = false;
 
 const usage =
 	\\Usage:
-	\\  Cubyz-linter [FILE|DIRECTORY]...        lint the files provided / files in the directories provided.
-	\\  Cubyz-linter --stdin-filename=FILENAME  lint the content provided via stdin, the filename is needed to know if its a zig / zon file.
-	\\  Cubyz-linter -h, --help                 print this help list
-	\\
+	\\  Cubyz-linter [OUTPUT] [FILE|DIRECTORY]...        lint the files provided / files in the directories provided.
+	\\  Cubyz-linter [OUTPUT] --stdin-filename=FILENAME  lint the content provided via stdin, the filename is needed to know if its a zig / zon file.
+	\\  Cubyz-linter -h, --help                          print this help list
+	\\OUTPUT:
+	\\ Specifies how each error is printed to stdrr.
+	\\          when not specified, just uses a human readable format.
+	\\  --json  prints at the end of linting every error in json format
+	\\  --zon   prints at the end of linting every error in zon format
 ;
 
-pub const ErrorLocation = struct {
+const LineData = struct {
 	start: usize,
 	end: usize,
+	number: usize,
+};
+
 
 pub const ErrorCharIndex = struct {
 	start: usize,
@@ -46,12 +53,130 @@ pub const ErrorCharIndex = struct {
 	}
 };
 
+const lol = enum { l };
+
+/// Just logs every error / info
+const Print = struct {
+	counter: usize = 0,
+
+	fn generateMessage(data: [:0]const u8, line: LineData, loc: ErrorCharIndex) []const u8 {
+		var startLineChars: std.ArrayList(u8) = .empty;
+		defer startLineChars.deinit(allocator);
+		for (data[line.start..loc.start]) |c| {
+			if (c == '\t') {
+				startLineChars.append(allocator, '\t') catch {};
+			} else {
+				startLineChars.append(allocator, ' ') catch {};
+			}
+		}
+		startLineChars.append(allocator, '^') catch {};
+		if (loc.start + 1 < data.len and loc.start < loc.end) {
+			for (data[loc.start .. loc.end - 1]) |c| {
+				if (c == '\t') { // this is a wierd case...
+					startLineChars.append(allocator, '\t') catch {};
+				} else {
+					startLineChars.append(allocator, '~') catch {};
+				}
+			}
+		}
+		return startLineChars.toOwnedSlice(allocator) catch @panic("OOM");
+	}
+
+	pub fn addError(_: *Print, ctx: Context, msg: []const u8, line: LineData, loc: ErrorCharIndex) void {
+		const output = generateMessage(ctx.data, line, loc);
+		defer allocator.free(output);
+		failed = true;
+
+		std.log.err("{s}:{}:{}-{}: {s}\n{s}\n{s}", .{ctx.filePath, line.number, loc.start - line.start + 1, loc.end - line.start + 1, msg, ctx.data[line.start..line.end], output});
+	}
+
+	pub fn addInfo(_: *Print, ctx: Context, msg: []const u8, line: LineData, loc: ErrorCharIndex) void {
+		const output = generateMessage(ctx.data, line, loc);
+		defer allocator.free(output);
+
+		std.log.info("{s}:{}:{}-{}: {s}\n{s}\n{s}", .{ctx.filePath, line.number, loc.start - line.start + 1, loc.end - line.start + 1, msg, ctx.data[line.start..line.end], output});
+	}
+
+	pub fn format(_: *const Print, _: *std.Io.Writer) std.Io.Writer.Error!void {}
+};
+
+const LintInfo = struct {
+	startLine: usize,
+	endLine: usize,
+	columnStart: usize,
+	columnEnd: usize,
+	filePath: []const u8,
+	msg: []const u8,
+	severity: enum { err, info },
+};
+
+/// saves every error/info into a struct which at then end gets stringified into either zon or json
+const Notation = struct {
+	lints: std.ArrayList(LintInfo) = .empty,
+	typ: enum {
+		zon,
+		json,
+	},
+
+	pub fn deinit(self: *Notation) void {
+		self.lints.deinit(allocator);
+	}
+
+	pub fn add(self: *Notation, info: LintInfo) void {
+		self.lints.append(allocator, info) catch @panic("OOM");
+	}
+
+	pub fn format(self: *const Notation, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+		try switch (self.typ) {
+			.zon => std.zon.stringify.serialize(self.lints.items, .{}, writer),
+			.json => std.json.Stringify.value(self.lints.items, .{}, writer),
+		};
+	}
+};
+
+const Output = union(enum) {
+	print: Print,
+	notation: Notation,
+
+	pub fn deinit(self: *Output) void {
+		switch (self.*) {
+			.print => {},
+			.notation => self.notation.deinit(),
+		}
+	}
+
+	pub fn format(self: *const Output) void {
+		switch (self.*) {
+			.print => {},
+			.notation => |notation| {
+				std.log.err("{f}", .{notation});
+			},
+		}
+	}
+
+	pub fn parseOutoutOrNull(arg: []const u8) ?Output {
+		if (std.mem.eql(u8, arg, "--json")) {
+			return .{.notation = .{.typ = .json}};
+		}
+		if (std.mem.eql(u8, arg, "--zon")) {
+			return .{.notation = .{.typ = .zon}};
+		}
+		return null;
+	}
+
+	pub fn parseOutout(arg: []const u8) Output {
+		if (parseOutoutOrNull(arg)) |output| return output;
+		return .{.print = .{}};
+	}
+};
+
 pub const Context = struct { // MARK: Context
 	data: [:0]const u8,
 	ast: ?std.zig.Ast,
 	filePath: []const u8,
+	output: *Output,
 
-	fn init(data: [:0]const u8, filePath: []const u8) !Context {
+	fn init(data: [:0]const u8, filePath: []const u8, output: *Output) !Context {
 		var ast: ?std.zig.Ast = null;
 		errdefer if (ast) |*a| a.deinit(allocator);
 		if (std.mem.endsWith(u8, filePath, ".zig")) {
@@ -63,22 +188,23 @@ pub const Context = struct { // MARK: Context
 			.data = data,
 			.ast = ast,
 			.filePath = filePath,
+			.output = output,
 		};
 	}
 
-	fn initFromFile(dir: std.Io.Dir, filePath: []const u8) !Context {
+	fn initFromFile(dir: std.Io.Dir, filePath: []const u8, output: *Output) !Context {
 		const data = try dir.readFileAllocOptions(io, filePath, allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-		return try .init(data, filePath);
+		return try .init(data, filePath, output);
 	}
 
-	fn initFromStdin(fileName: []const u8) !Context {
+	fn initFromStdin(fileName: []const u8, output: *Output) !Context {
 		const stdin: std.Io.File = .stdin();
 		var reader = stdin.reader(io, &.{});
 
 		const data = try reader.interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"1", 0);
 		errdefer allocator.free(data);
-		return try .init(data, fileName);
+		return try .init(data, fileName, output);
 	}
 
 	fn deinit(self: *Context) void {
@@ -86,7 +212,7 @@ pub const Context = struct { // MARK: Context
 		if (self.ast) |*ast| ast.deinit(allocator);
 	}
 
-	fn getLineData(data: []const u8, charIndex: usize) struct { start: usize, end: usize, number: usize } {
+	fn getLineData(data: []const u8, charIndex: usize) LineData {
 		var lineStart: usize = 0;
 		var lineNumber: usize = 1;
 		var lineEnd: usize = data.len;
@@ -108,73 +234,51 @@ pub const Context = struct { // MARK: Context
 	pub fn printError(self: Context, msg: []const u8, loc: ErrorCharIndex) void {
 		const line = getLineData(self.data, loc.start);
 		const endLine = getLineData(self.data, loc.end);
-		var actualLoc = loc;
-		if (line.number != endLine.number) {
-			// multiple line errors currently not supported
-			// will just be interpreted as until line end
 
-			actualLoc.end = line.end;
+		switch (self.output.*) {
+			.print => {
+				self.output.print.addError(self, msg, line, .{
+					.start = loc.start,
+					.end = if (line.number != endLine.number) line.end else loc.end, // print currently doens't support multiline messages
+				});
+			},
+			.notation => {
+				self.output.notation.add(.{
+					.filePath = self.filePath,
+					.startLine = line.number,
+					.endLine = endLine.number,
+					.columnStart = loc.start - line.start + 1,
+					.columnEnd = loc.end - endLine.start + 1,
+					.msg = msg,
+					.severity = .err,
+				});
+			},
 		}
-
-		var startLineChars: std.ArrayList(u8) = .empty;
-		defer startLineChars.deinit(allocator);
-		for (self.data[line.start..actualLoc.start]) |c| {
-			if (c == '\t') {
-				startLineChars.append(allocator, '\t') catch {};
-			} else {
-				startLineChars.append(allocator, ' ') catch {};
-			}
-		}
-		startLineChars.append(allocator, '^') catch {};
-		if (actualLoc.start + 1 < self.data.len and actualLoc.start < actualLoc.end) {
-			for (self.data[actualLoc.start .. actualLoc.end - 1]) |c| {
-				if (c == '\t') { // this is a wierd case...
-					startLineChars.append(allocator, '\t') catch {};
-				} else {
-					startLineChars.append(allocator, '~') catch {};
-				}
-			}
-		}
-
-		failed = true;
-
-		std.log.err("{s}:{}:{}-{}: {s}\n{s}\n{s}", .{self.filePath, line.number, actualLoc.start - line.start + 1, actualLoc.end - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
 	}
 
 	pub fn printInfo(self: Context, msg: []const u8, loc: ErrorCharIndex) void {
 		const line = getLineData(self.data, loc.start);
 		const endLine = getLineData(self.data, loc.end);
-		var actualLoc = loc;
-		if (line.number != endLine.number) {
-			// multiple line errors currently not supported
-			// will just be interpreted as until line end
 
-			actualLoc.end = line.end;
+		switch (self.output.*) {
+			.print => {
+				self.output.print.addInfo(self, msg, line, .{
+					.start = loc.start,
+					.end = if (line.number != endLine.number) line.end else loc.end, // print currently doens't support multiline messages
+				});
+			},
+			.notation => {
+				self.output.notation.add(.{
+					.filePath = self.filePath,
+					.startLine = line.number,
+					.endLine = endLine.number,
+					.columnStart = loc.start - line.start + 1,
+					.columnEnd = loc.end - endLine.start + 1,
+					.msg = msg,
+					.severity = .info,
+				});
+			},
 		}
-
-		var startLineChars: std.ArrayList(u8) = .empty;
-		defer startLineChars.deinit(allocator);
-		for (self.data[line.start..actualLoc.start]) |c| {
-			if (c == '\t') {
-				startLineChars.append(allocator, '\t') catch {};
-			} else {
-				startLineChars.append(allocator, ' ') catch {};
-			}
-		}
-		startLineChars.append(allocator, '^') catch {};
-		if (actualLoc.start + 1 < self.data.len and actualLoc.start < actualLoc.end) {
-			for (self.data[actualLoc.start + 1 .. actualLoc.end]) |c| {
-				if (c == '\t') { // this is a wierd case...
-					startLineChars.append(allocator, '\t') catch {};
-				} else {
-					startLineChars.append(allocator, '~') catch {};
-				}
-			}
-		}
-
-		failed = true;
-
-		std.log.info("{s}:{}:{}-{}: {s}\n{s}\n{s}", .{self.filePath, line.number, actualLoc.start - line.start + 1, actualLoc.end - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
 	}
 };
 
@@ -184,19 +288,19 @@ fn check(ctx: Context) void {
 	}
 }
 
-fn checkStdin(fileName: []const u8) !void {
-	var ctx: Context = try .initFromStdin(fileName);
+fn checkStdin(fileName: []const u8, output: *Output) !void {
+	var ctx: Context = try .initFromStdin(fileName, output);
 	defer ctx.deinit();
 	check(ctx);
 }
 
-fn checkFile(dir: std.Io.Dir, filePath: []const u8) !void {
-	var ctx: Context = try .initFromFile(dir, filePath);
+fn checkFile(dir: std.Io.Dir, filePath: []const u8, output: *Output) !void {
+	var ctx: Context = try .initFromFile(dir, filePath, output);
 	defer ctx.deinit();
 	check(ctx);
 }
 
-fn checkDirectory(dir: std.Io.Dir) !void {
+fn checkDirectory(dir: std.Io.Dir, output: *Output) !void {
 	var walker = try dir.walk(allocator);
 	defer walker.deinit();
 	while (try walker.next(io)) |child| {
@@ -205,7 +309,7 @@ fn checkDirectory(dir: std.Io.Dir) !void {
 			failed = true;
 		}
 		if (child.kind == .file and (std.mem.endsWith(u8, child.basename, ".vert") or std.mem.endsWith(u8, child.basename, ".frag") or std.mem.endsWith(u8, child.basename, ".comp") or (std.mem.endsWith(u8, child.basename, ".zig") and !std.mem.eql(u8, child.basename, "fmt.zig")))) {
-			try checkFile(dir, child.path);
+			try checkFile(dir, child.path, output);
 		}
 	}
 }
@@ -232,21 +336,28 @@ pub fn main(init: std.process.Init) !void {
 		return;
 	}
 
+	var output: Output = .parseOutout(args[1]);
+	defer {
+		output.format();
+		output.deinit();
+	}
+	const argIndex: usize = if (output == .print) 1 else 2;
+
 	const fileNameOption = "--stdin-filename=";
-	if (std.mem.startsWith(u8, args[1], fileNameOption)) {
+	if (argIndex < args.len and std.mem.startsWith(u8, args[argIndex], fileNameOption)) {
 		if (args[1].len == fileNameOption.len) {
 			std.log.err("No filename given to --stdin-filename", .{});
 			std.process.exit(1);
 		}
 
-		checkStdin(args[1][fileNameOption.len..]) catch |err| {
+		checkStdin(args[1][fileNameOption.len..], &output) catch |err| {
 			std.log.err("Unable to read from stdin: {t}", .{err});
 			std.process.exit(1);
 		};
 		return;
 	}
 
-	for (args[1..]) |arg| {
+	for (args[argIndex..]) |arg| {
 		const stat = std.Io.Dir.cwd().statFile(io, arg, .{.follow_symlinks = true}) catch |err| {
 			std.log.err("Error while trying to read metadata of file '{s}'. 'Error: {t}", .{arg, err});
 			return err;
@@ -254,9 +365,9 @@ pub fn main(init: std.process.Init) !void {
 		if (stat.kind == .directory) {
 			var dir = try std.Io.Dir.cwd().openDir(io, arg, .{.iterate = true});
 			defer dir.close(io);
-			try checkDirectory(dir);
+			try checkDirectory(dir, &output);
 		} else {
-			try checkFile(std.Io.Dir.cwd(), arg);
+			try checkFile(std.Io.Dir.cwd(), arg, &output);
 		}
 	}
 }
