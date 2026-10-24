@@ -34,7 +34,7 @@ pub const ErrorCharIndex = struct {
 		};
 	}
 
-	pub fn charWithlength(charIndex: usize, len: usize) ErrorCharIndex {
+	pub fn range(startIndex: usize, len: usize) ErrorCharIndex {
 		return .{
 			.start = charIndex,
 			.end = charIndex + len,
