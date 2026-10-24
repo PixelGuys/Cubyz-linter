@@ -41,7 +41,7 @@ pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Inde
 			const token = ast.nodeMainToken(rhsNode);
 			const importKeyword = ast.tokenSlice(token);
 			if (!std.mem.eql(u8, importKeyword, "@import")) return false;
-			ctx.printError("@import should not have a trailing comma.", ast.tokenStart(token));
+			ctx.printError("@import should not have a trailing comma.", .fromSpan(ast.tokenToSpan(ast.tokenStart(token))));
 			return true;
 		},
 		.builtin_call_two => { // @import("x")
@@ -53,7 +53,7 @@ pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Inde
 			importName = importName[1 .. importName.len - 1];
 
 			if (!isAliasAllowed(importName, aliasName)) {
-				ctx.printError("Encountered import with mismatched name", ast.tokenStart(token));
+				ctx.printError("Encountered import with mismatched name", .fromSpan(ast.tokenToSpan(token)));
 			}
 			return true;
 		},
@@ -63,7 +63,7 @@ pub fn isImport(ctx: main.Context, ast: std.zig.Ast, node: std.zig.Ast.Node.Inde
 
 			if (!isAliasAllowed(importName, aliasName)) {
 				if (mode == .ignoreAliasNameMismatch) return false;
-				ctx.printError("Encountered alias with mismatched name", ast.tokenStart(token));
+				ctx.printError("Encountered alias with mismatched name", .fromSpan(ast.tokenToSpan(token)));
 			}
 			return true;
 		},
@@ -79,8 +79,8 @@ pub fn check(ctx: main.Context) void {
 	for (root) |node| {
 		if (isImport(ctx, ast, node, if (firstNonImportNode != null) .ignoreAliasNameMismatch else .errorOnAliasNameMismatch)) {
 			if (firstNonImportNode) |nonImportNode| {
-				ctx.printError("Encountered import/alias after import section", ast.tokenStart(ast.firstToken(node)));
-				ctx.printInfo("determined end of import section", ast.tokenStart(ast.firstToken(nonImportNode)));
+				ctx.printError("Encountered import/alias after import section", .fromSpan(ast.tokenToSpan(ast.firstToken(node))));
+				ctx.printInfo("determined end of import section", .fromSpan(ast.tokenToSpan(ast.firstToken(nonImportNode))));
 			}
 		} else {
 			if (firstNonImportNode == null) {
