@@ -16,7 +16,7 @@ const usage =
 	\\
 ;
 
-pub const ErrorCharIndex = struct {
+pub const ErrorLocation = struct {
 	start: usize,
 	end: usize,
 
