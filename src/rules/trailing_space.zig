@@ -7,7 +7,7 @@ pub fn check(ctx: main.Context) void {
 
 	for (0..ctx.data.len - 1) |i| {
 		if ((ctx.data[i] == ' ' or ctx.data[i] == '\t') and ctx.data[i + 1] == '\n') {
-			ctx.printError("Line contains trailing whitespaces. Please remove them.", .singleChar(i));
+			ctx.printError("Line contains trailing whitespaces. Please remove them.", .single(i));
 		}
 	}
 }

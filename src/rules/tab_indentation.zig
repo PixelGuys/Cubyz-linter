@@ -7,7 +7,7 @@ pub fn check(ctx: main.Context) void {
 	for (ctx.data, 0..) |char, i| {
 		if (lineStart and char == '\t') continue;
 		if (lineStart and char == ' ') {
-			ctx.printError("Incorrect indentation. Please use tabs instead of spaces.", .singleChar(i));
+			ctx.printError("Incorrect indentation. Please use tabs instead of spaces.", .single(i));
 			lineStart = false;
 			continue;
 		}

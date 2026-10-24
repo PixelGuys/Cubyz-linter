@@ -11,7 +11,7 @@ pub fn check(ctx: main.Context) void {
 		if (ctx.data[commentStart] != ' ' and ctx.data[commentStart] != '\n') {
 			if (i != 0 and ctx.data[i - 1] == ':') continue; // https://
 			if (i != 0 and ctx.data[i - 1] == '"') continue; // part of a string
-			ctx.printError("Comments should include a space before text, ex: // whatever", .singleChar(commentStart));
+			ctx.printError("Comments should include a space before text, ex: // whatever", .single(commentStart));
 		}
 	}
 }

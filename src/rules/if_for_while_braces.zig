@@ -9,7 +9,7 @@ fn checkType(ctx: main.Context, comptime typ: enum { @"if", @"while", @"for" }, 
 		.block, .block_semicolon, .block_two, .block_two_semicolon => {},
 		else => {
 			if (std.mem.findScalar(u8, ast.getNodeSource(node), '\n')) |index| {
-				ctx.printError(@tagName(typ) ++ " expression should either be on a single line or use a block", .singleChar(ast.tokenStart(ast.firstToken(node)) + index));
+				ctx.printError(@tagName(typ) ++ " expression should either be on a single line or use a block", .single(ast.tokenStart(ast.firstToken(node)) + index));
 			}
 		},
 	}
@@ -19,7 +19,7 @@ fn checkType(ctx: main.Context, comptime typ: enum { @"if", @"while", @"for" }, 
 			const elseStart = ast.tokenStart(elseToken);
 			const end = ast.tokenToSpan(ast.lastToken(node)).end;
 			if (std.mem.findScalar(u8, ctx.data[elseStart..end], '\n')) |index| {
-				ctx.printError("else expression should either be on a single line or use a block", .singleChar(elseStart + index));
+				ctx.printError("else expression should either be on a single line or use a block", .single(elseStart + index));
 			}
 		},
 	}

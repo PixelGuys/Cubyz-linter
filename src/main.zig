@@ -20,24 +20,24 @@ pub const ErrorLocation = struct {
 	start: usize,
 	end: usize,
 
-	pub fn fromSpan(span: std.zig.Ast.Span) ErrorCharIndex {
+	pub fn fromSpan(span: std.zig.Ast.Span) ErrorLocation {
 		return .{
 			.start = span.start,
 			.end = span.end,
 		};
 	}
 
-	pub fn single(charIndex: usize) ErrorCharIndex {
+	pub fn single(charIndex: usize) ErrorLocation {
 		return .{
 			.start = charIndex,
 			.end = charIndex,
 		};
 	}
 
-	pub fn range(startIndex: usize, len: usize) ErrorCharIndex {
+	pub fn range(startIndex: usize, len: usize) ErrorLocation {
 		return .{
-			.start = charIndex,
-			.end = charIndex + len,
+			.start = startIndex,
+			.end = startIndex + len,
 		};
 	}
 };
@@ -101,7 +101,7 @@ pub const Context = struct { // MARK: Context
 		return .{.start = lineStart, .end = lineEnd, .number = lineNumber};
 	}
 
-	pub fn printError(self: Context, msg: []const u8, loc: ErrorCharIndex) void {
+	pub fn printError(self: Context, msg: []const u8, loc: ErrorLocation) void {
 		const line = getLineData(self.data, loc.start);
 		const endLine = getLineData(self.data, loc.end);
 		var actualLoc = loc;
@@ -137,7 +137,7 @@ pub const Context = struct { // MARK: Context
 		std.log.err("{s}:{}:{}-{}: {s}\n{s}\n{s}", .{self.filePath, line.number, actualLoc.start - line.start + 1, actualLoc.end - line.start + 1, msg, self.data[line.start..line.end], startLineChars.items});
 	}
 
-	pub fn printInfo(self: Context, msg: []const u8, loc: ErrorCharIndex) void {
+	pub fn printInfo(self: Context, msg: []const u8, loc: ErrorLocation) void {
 		const line = getLineData(self.data, loc.start);
 		const endLine = getLineData(self.data, loc.end);
 		var actualLoc = loc;
