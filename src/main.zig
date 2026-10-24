@@ -27,7 +27,7 @@ pub const ErrorLocation = struct {
 		};
 	}
 
-	pub fn singleChar(charIndex: usize) ErrorCharIndex {
+	pub fn single(charIndex: usize) ErrorCharIndex {
 		return .{
 			.start = charIndex,
 			.end = charIndex,
