@@ -160,7 +160,7 @@ pub const Context = struct { // MARK: Context
 		startLineChars.append(allocator, '^') catch {};
 		if (actualLoc.start + 1 < self.data.len and actualLoc.start < actualLoc.end) {
 			for (self.data[actualLoc.start + 1 .. actualLoc.end]) |c| {
-				if (c == '\t') { // this is a wierd case...
+				if (c == '\t') { // this is a weird case...
 					startLineChars.append(allocator, '\t') catch {};
 				} else {
 					startLineChars.append(allocator, '~') catch {};
