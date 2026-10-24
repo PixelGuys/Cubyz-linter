@@ -68,7 +68,7 @@ pub fn check(ctx: main.Context) void {
 
 		const foundMember = for (container.ast.members) |index| {
 			const tag = ast.nodeTag(index);
-			if (tag == .container_field_init) {
+			if (tag == .container_field_init or tag == .container_field_align) {
 				break true;
 			}
 
