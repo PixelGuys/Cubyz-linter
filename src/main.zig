@@ -106,8 +106,8 @@ pub const Context = struct { // MARK: Context
 		const endLine = getLineData(self.data, loc.end);
 		var actualLoc = loc;
 		if (line.number != endLine.number) {
-			// multiple line errors currently not supported
-			// will just be interpreted as until line end (ref: #38)
+			// TODO: multiple line errors currently not supported
+			// will just be interpreted as until line end (ref: #41)
 
 			actualLoc.end = line.end;
 		}
@@ -124,7 +124,7 @@ pub const Context = struct { // MARK: Context
 		startLineChars.append(allocator, '^') catch {};
 		if (actualLoc.start + 1 < self.data.len and actualLoc.start < actualLoc.end) {
 			for (self.data[actualLoc.start .. actualLoc.end - 1]) |c| {
-				if (c == '\t') { // this is a wierd case... (ref: #39)
+				if (c == '\t') { // TODO: how should we handle this? (ref: #42)
 					startLineChars.append(allocator, '\t') catch {};
 				} else {
 					startLineChars.append(allocator, '~') catch {};
@@ -142,8 +142,8 @@ pub const Context = struct { // MARK: Context
 		const endLine = getLineData(self.data, loc.end);
 		var actualLoc = loc;
 		if (line.number != endLine.number) {
-			// multiple line errors currently not supported
-			// will just be interpreted as until line end
+			// TODO: multiple line errors currently not supported
+			// will just be interpreted as until line end (ref: #41)
 
 			actualLoc.end = line.end;
 		}
@@ -160,7 +160,7 @@ pub const Context = struct { // MARK: Context
 		startLineChars.append(allocator, '^') catch {};
 		if (actualLoc.start + 1 < self.data.len and actualLoc.start < actualLoc.end) {
 			for (self.data[actualLoc.start + 1 .. actualLoc.end]) |c| {
-				if (c == '\t') { // this is a weird case...
+				if (c == '\t') { // TODO: how should we handle this? (ref: #42)
 					startLineChars.append(allocator, '\t') catch {};
 				} else {
 					startLineChars.append(allocator, '~') catch {};
