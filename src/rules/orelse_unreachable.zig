@@ -13,6 +13,6 @@ pub fn check(ctx: main.Context) void {
 		const nextToken = ast.tokens.get(mainToken + 1);
 		if (nextToken.tag != .keyword_unreachable) continue;
 
-		ctx.printError("please use '.?' instead of 'orelse unreachable'", ast.tokenStart(mainToken));
+		ctx.printError("please use '.?' instead of 'orelse unreachable'", .fromSpan(ast.tokensToSpan(mainToken, mainToken + 1, mainToken)));
 	}
 }

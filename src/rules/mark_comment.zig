@@ -34,6 +34,6 @@ pub fn check(ctx: main.Context) void {
 
 		const msg = std.fmt.allocPrint(main.allocator, "Container over the size of {d} should have a MARK comment like this: \"// MARK: {s}\"", .{maxLineNumber, name}) catch @panic("OOM");
 		defer main.allocator.free(msg);
-		ctx.printError(msg, firstTokenlocation.line_end);
+		ctx.printError(msg, .single(firstTokenlocation.line_end));
 	}
 }
